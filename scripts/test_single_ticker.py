@@ -26,4 +26,7 @@ def test_single_ticker(ticker: str, start_year=1992, end_year=2024):
     print(f" Exported {len(df_exported)} rows to CSV")
 
 if __name__ == "__main__":
-    test_single_ticker("XRX", start_year=1992, end_year=2024)
+    # test_single_ticker("XRX", start_year=1992, end_year=2024)
+    runner = WRDSQueryRunner()
+    df = runner.get_comp_execucomp_auto_years("XRX")
+    print(df.head())
