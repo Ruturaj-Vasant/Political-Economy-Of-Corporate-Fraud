@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.pyo
+*.pyd
+*.so
+*.log
+
+# Environments
+.env
+*.env
+.venv/
+env/
+venv/
+wrds_env/
+wrds_env
+
+# VSCode
+.vscode/
+
+# OS
+.DS_Store
+
+# Data
+*.csv
+*.xlsx
+*.sql
+data/
