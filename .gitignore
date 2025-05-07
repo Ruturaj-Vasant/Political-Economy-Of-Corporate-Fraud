@@ -27,3 +27,5 @@ wrds_env
 *.xlsx
 *.sql
 data/
+
+Trials/
