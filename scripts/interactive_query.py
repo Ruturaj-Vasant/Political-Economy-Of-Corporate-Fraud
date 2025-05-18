@@ -10,6 +10,17 @@ import datetime
 def main():
     runner = WRDSQueryRunner()
     
+    # Ask for compensation type
+    print("\nChoose data type:")
+    print("1 - Annual Executive Compensation")
+    print("2 - Director Compensation")
+    print("3 - North America Annual Fundamentals")
+    comp_type = input("Enter 1, 2, or 3: ").strip()
+    
+    if comp_type not in ["1", "2", "3"]:
+        print("Invalid choice. Exiting.")
+        return
+
     # Ask for ticker
     ticker = input("Enter company ticker (e.g., AAPL): ").strip().upper()
 
@@ -33,14 +44,31 @@ def main():
     print("2 - Download and display data")
     choice = input("Enter 1 or 2: ").strip()
 
-    # Execute
-    if choice == "1":
-        runner.download_comp_execucomp(ticker, start_year, end_year)
-    elif choice == "2":
-        df = runner.get_comp_execucomp(ticker, start_year, end_year)
-        print(df.head())
-    else:
-        print("Invalid choice. Exiting.")
+    # Execute based on data type
+    if comp_type == "1":  # Annual Executive Compensation
+        if choice == "1":
+            runner.download_comp_execucomp_annual_compensation(ticker, start_year, end_year)
+        elif choice == "2":
+            df = runner.get_comp_execucomp_annual_compensation(ticker, start_year, end_year)
+            print(df.head())
+        else:
+            print("Invalid choice. Exiting.")
+    elif comp_type == "2":  # Director Compensation
+        if choice == "1":
+            runner.download_comp_director_compensation(ticker, start_year, end_year)
+        elif choice == "2":
+            df = runner.get_comp_director_compensation(ticker, start_year, end_year)
+            print(df.head())
+        else:
+            print("Invalid choice. Exiting.")
+    else:  # North America Annual Fundamentals
+        if choice == "1":
+            runner.download_comp_northamerica_fundamentals_annual(ticker, start_year, end_year)
+        elif choice == "2":
+            df = runner.get_comp_northamerica_fundamentals_annual(ticker, start_year, end_year)
+            print(df.head())
+        else:
+            print("Invalid choice. Exiting.")
 
 if __name__ == "__main__":
     main()

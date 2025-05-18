@@ -1,0 +1,27 @@
+[
+    {
+        "column": "ticker",
+        "name": "Ticker Symbol",
+        "description": "Stock ticker symbol of the company"
+    },
+    {
+        "column": "gvkey",
+        "name": "Global Company Key",
+        "description": "Unique identifier for each company in Compustat"
+    },
+    {
+        "column": "sales",
+        "name": "Annual Sales",
+        "description": "Total revenue for the year"
+    },
+    {
+        "column": "ni",
+        "name": "Net Income",
+        "description": "Company's total profit (bottom line)"
+    },
+    {
+        "column": "roa",
+        "name": "Return on Assets",
+        "description": "Profitability relative to total assets"
+    }
+]
