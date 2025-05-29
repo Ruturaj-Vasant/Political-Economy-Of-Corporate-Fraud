@@ -27,6 +27,11 @@ wrds_env
 *.xlsx
 *.sql
 data/
-
+data.zip
 Trials/
 Trials
+
+extracted_pdf
+manual_downloads
+
+whatdowewant.txt

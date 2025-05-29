@@ -243,19 +243,3 @@ class WRDSQueryRunner:
         # Create ticker-specific folder path
         ticker_path = f"{output_path}/{ticker}"
         CSVExporter.export(df, f"{ticker}_{start_year}_{end_year}_comp_northamerica_fundamentals_annual.csv", ticker_path)
-
-    def get_comp_northamerica_fundamentals_annual_auto_years(self, ticker: str) -> pd.DataFrame:
-        """
-        Fetch annual fundamentals data for a given ticker using default year range (1992 to current year - 1).
-        
-        Args:
-            ticker (str): Stock ticker symbol
-            
-        Returns:
-            pd.DataFrame: Annual fundamentals data
-        """
-        start_year = 1992
-        end_year = datetime.datetime.now().year - 1
-        return self.get_comp_northamerica_fundamentals_annual(ticker, start_year, end_year)
-
-   

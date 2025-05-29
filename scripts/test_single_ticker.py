@@ -1,8 +1,6 @@
 # scripts/test_single_ticker.
 import sys
 from pathlib import Path
-import pandas as pd
-from config.wrds_config import get_wrds_connectio
 # from modules.csv_exporter import CSVExporter
 
 # Adds the parent directory of "scripts" to the Python path
@@ -33,22 +31,8 @@ def test_single_ticker(ticker: str, start_year=1992, end_year=2024):
     # df = runner.get_comp_execucomp_annual_compensation_auto_years("XRX")
 
 if __name__ == "__main__":
-    #test_single_ticker("XRX", start_year=1992, end_year=2024)
-    runner = WRDSQueryRunner()
-
+    test_single_ticker("XRX", start_year=1992, end_year=2024)
+    # runner = WRDSQueryRunner()
     # df = runner.get_comp_execucomp_annual_compensation_auto_years("XRX")
     # print(df.head())
-
-
-# Get column names from comp.funda
-    query = """
-    SELECT * 
-    FROM comp.funda
-    WHERE fyear = 2023
-    LIMIT 1
-    """
-
-    df = pd.read_sql(query, conn)
-    all_columns = df.columns.tolist()
-    print(f"Total columns: {len(all_columns)}")
-    print(all_columns)
+    
