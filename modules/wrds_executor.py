@@ -4,10 +4,54 @@ import pandas as pd
 from config.wrds_config import get_wrds_connection
 from modules.csv_exporter import CSVExporter
 import datetime
+from pathlib import Path
 
 class WRDSQueryRunner:
     def __init__(self):
         self.conn = get_wrds_connection()
+
+    def _check_existing_data(self, ticker: str, start_year: int, end_year: int, data_type: str, output_path: str = "data") -> bool:
+        """
+        Check if data already exists for the given parameters.
+        
+        Args:
+            ticker (str): Stock ticker symbol
+            start_year (int): Start year for data retrieval
+            end_year (int): End year for data retrieval
+            data_type (str): Type of data (e.g., 'comp_execucomp_anncomp', 'comp_director_compensation', 'comp_northamerica_fundamentals_annual')
+            output_path (str): Base directory for data storage
+            
+        Returns:
+            bool: True if data exists and covers the requested range, False otherwise
+        """
+        ticker_path = Path(output_path) / ticker
+        if not ticker_path.exists():
+            return False
+            
+        # Look for files matching the pattern
+        pattern = f"{ticker}_*_{data_type}.csv"
+        matching_files = list(ticker_path.glob(pattern))
+        
+        if not matching_files:
+            return False
+            
+        # Check if any existing file covers our requested range
+        for file in matching_files:
+            try:
+                # Extract year range from filename
+                filename = file.stem
+                parts = filename.split('_')
+                file_start_year = int(parts[1])
+                file_end_year = int(parts[2])
+                
+                # If existing file covers our requested range, we don't need to download
+                if file_start_year <= start_year and file_end_year >= end_year:
+                    print(f"✅ Data already exists for {ticker} ({data_type}) covering {start_year}-{end_year}")
+                    return True
+            except (IndexError, ValueError):
+                continue
+                
+        return False
 
     def get_comp_execucomp_annual_compensation(self, ticker: str, start_year: int = 1992, end_year: int = 2024) -> pd.DataFrame:
         query = f"""
@@ -131,12 +175,18 @@ class WRDSQueryRunner:
         return pd.read_sql(query, self.conn)
 
     def download_comp_execucomp_annual_compensation(self, ticker: str, start_year: int = 1992, end_year: int = 2024, output_path: str = "data"):
+        # Check if data already exists
+        if self._check_existing_data(ticker, start_year, end_year, "comp_execucomp_anncomp", output_path):
+            return
+            
         df = self.get_comp_execucomp_annual_compensation(ticker, start_year, end_year)
-        # Create ticker-specific folder path
-        ticker_path = f"{output_path}/{ticker}"
-        CSVExporter.export(df, f"{ticker}_{start_year}_{end_year}_comp_execucomp_anncomp.csv", ticker_path)
+        if df is not None and not df.empty:
+            # Create ticker-specific folder path
+            ticker_path = f"{output_path}/{ticker}"
+            CSVExporter.export(df, f"{ticker}_{start_year}_{end_year}_comp_execucomp_anncomp.csv", ticker_path)
+        else:
+            print(f"No executive compensation data found for {ticker} between {start_year} and {end_year}")
 
- 
     def get_comp_director_compensation(self, ticker: str, start_year: int = 1992, end_year: int = 2024) -> pd.DataFrame:
         """
         Fetch director compensation data for a given ticker and year range.
@@ -200,10 +250,17 @@ class WRDSQueryRunner:
             end_year (int): End year for data retrieval
             output_path (str): Directory to save the CSV file
         """
+        # Check if data already exists
+        if self._check_existing_data(ticker, start_year, end_year, "comp_director_compensation", output_path):
+            return
+            
         df = self.get_comp_director_compensation(ticker, start_year, end_year)
-        # Create ticker-specific folder path
-        ticker_path = f"{output_path}/{ticker}"
-        CSVExporter.export(df, f"{ticker}_{start_year}_{end_year}_comp_director_compensation.csv", ticker_path)
+        if df is not None and not df.empty:
+            # Create ticker-specific folder path
+            ticker_path = f"{output_path}/{ticker}"
+            CSVExporter.export(df, f"{ticker}_{start_year}_{end_year}_comp_director_compensation.csv", ticker_path)
+        else:
+            print(f"No director compensation data found for {ticker} between {start_year} and {end_year}")
 
     def get_comp_northamerica_fundamentals_annual(self, ticker: str, start_year: int = 1992, end_year: int = 2024) -> pd.DataFrame:
         """
@@ -239,7 +296,14 @@ class WRDSQueryRunner:
             end_year (int): End year for data retrieval
             output_path (str): Directory to save the CSV file
         """
+        # Check if data already exists
+        if self._check_existing_data(ticker, start_year, end_year, "comp_northamerica_fundamentals_annual", output_path):
+            return
+            
         df = self.get_comp_northamerica_fundamentals_annual(ticker, start_year, end_year)
-        # Create ticker-specific folder path
-        ticker_path = f"{output_path}/{ticker}"
-        CSVExporter.export(df, f"{ticker}_{start_year}_{end_year}_comp_northamerica_fundamentals_annual.csv", ticker_path)
+        if df is not None and not df.empty:
+            # Create ticker-specific folder path
+            ticker_path = f"{output_path}/{ticker}"
+            CSVExporter.export(df, f"{ticker}_{start_year}_{end_year}_comp_northamerica_fundamentals_annual.csv", ticker_path)
+        else:
+            print(f"No fundamentals data found for {ticker} between {start_year} and {end_year}")
