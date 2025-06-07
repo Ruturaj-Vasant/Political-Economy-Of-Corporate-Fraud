@@ -26,6 +26,8 @@ wrds_env
 *.csv
 *.xlsx
 *.sql
+*.db
+corporate_fraud.db
 data/
 data.zip
 Trials/
