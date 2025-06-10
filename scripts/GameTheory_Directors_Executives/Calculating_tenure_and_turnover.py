@@ -40,7 +40,14 @@ def extract_director_metrics(director_file):
             departed_count = len(prev_set - curr_set)
             turnover.append({'year': y1, 'new_count': new_count, 'departed_count': departed_count})
 
-    return {'max_directors': max_directors, 'turnover': turnover}
+    meta = {
+        'gvkey': df['gvkey'].unique().tolist(),
+        'coname': df['coname'].unique().tolist() if 'coname' in df.columns else [],
+        'cusip': df['cusip'].unique().tolist() if 'cusip' in df.columns else [],
+        'ticker': df['ticker'].unique().tolist() if 'ticker' in df.columns else []
+    }
+
+    return {'max_directors': max_directors, 'turnover': turnover, 'meta': meta}
 def extract_ceo_metrics(execucomp_file):
     """Analyze executive compensation data using ceoann only."""
     df = pd.read_csv(execucomp_file)
@@ -81,11 +88,28 @@ def extract_ceo_metrics(execucomp_file):
                 'tenure': years[j] - start_year
             })
 
-    return {'ceo_info': ceo_info}
+    meta = {
+        'gvkey': df['gvkey'].unique().tolist(),
+        'coname': df['coname'].unique().tolist() if 'coname' in df.columns else [],
+        'cusip': df['cusip'].unique().tolist() if 'cusip' in df.columns else [],
+        'ticker': df['ticker'].unique().tolist() if 'ticker' in df.columns else []
+    }
+
+    return {'ceo_info': ceo_info, 'meta': meta}
 
 def create_director_csv(results, output_path):
     """Create CSV file for director information."""
     data = []
+    
+    gvkeys = results['meta'].get('gvkey', [])
+    conames = results['meta'].get('coname', [])
+    cusips = results['meta'].get('cusip', [])
+    tickers = results['meta'].get('ticker', [])
+    
+    gvkey_val = gvkeys[0] if gvkeys else None
+    coname_val = conames[0] if conames else None
+    cusip_val = cusips[0] if cusips else None
+    ticker_val = tickers[0] if tickers else None
     
     # Process max directors
     for entry in results['max_directors']:
@@ -105,7 +129,11 @@ def create_director_csv(results, output_path):
             'year': year,
             'max_directors': max_directors,
             'new_directors': new_count,
-            'departed_directors': departed_count
+            'departed_directors': departed_count,
+            'gvkey': gvkey_val,
+            'coname': coname_val,
+            'cusip': cusip_val,
+            'ticker': ticker_val
         })
     
     if data:  # Only create CSV if we have data
@@ -119,12 +147,26 @@ def create_ceo_csv(results, output_path):
     """Create CSV file for CEO information."""
     data = []
     
+    gvkeys = results['meta'].get('gvkey', [])
+    conames = results['meta'].get('coname', [])
+    cusips = results['meta'].get('cusip', [])
+    tickers = results['meta'].get('ticker', [])
+    
+    gvkey_val = gvkeys[0] if gvkeys else None
+    coname_val = conames[0] if conames else None
+    cusip_val = cusips[0] if cusips else None
+    ticker_val = tickers[0] if tickers else None
+    
     for entry in results['ceo_info']:
         data.append({
             'year': entry['year'],
             'ceo_name': entry['name'],
             'became_ceo': entry['became_ceo'],
-            'tenure': entry['tenure']
+            'tenure': entry['tenure'],
+            'gvkey': gvkey_val,
+            'coname': coname_val,
+            'cusip': cusip_val,
+            'ticker': ticker_val
         })
     
     if data:  # Only create CSV if we have data
@@ -147,6 +189,18 @@ def create_combined_csv(director_results, ceo_results, output_path):
     
     years = sorted(list(years))
     
+    # Extract metadata, prefer director's metadata if available
+    meta = {}
+    for key in ['gvkey', 'coname', 'cusip', 'ticker']:
+        dir_meta_vals = director_results.get('meta', {}).get(key, [])
+        ceo_meta_vals = ceo_results.get('meta', {}).get(key, [])
+        if dir_meta_vals:
+            meta[key] = dir_meta_vals[0]
+        elif ceo_meta_vals:
+            meta[key] = ceo_meta_vals[0]
+        else:
+            meta[key] = None
+    
     for year in years:
         # Get director info
         director_info = next((d for d in director_results['max_directors'] if d['year'] == year), None)
@@ -162,7 +216,11 @@ def create_combined_csv(director_results, ceo_results, output_path):
             'departed_directors': turnover_info['departed_count'] if turnover_info else None,
             'ceo_name': ceo_info['name'] if ceo_info else None,
             'became_ceo': ceo_info['became_ceo'] if ceo_info else None,
-            'ceo_tenure': ceo_info['tenure'] if ceo_info else None
+            'ceo_tenure': ceo_info['tenure'] if ceo_info else None,
+            'gvkey': meta['gvkey'],
+            'coname': meta['coname'],
+            'cusip': meta['cusip'],
+            'ticker': meta['ticker']
         })
     
     if data:  # Only create CSV if we have data

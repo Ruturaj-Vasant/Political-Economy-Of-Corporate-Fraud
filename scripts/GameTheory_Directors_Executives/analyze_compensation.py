@@ -2,6 +2,9 @@ import pandas as pd
 import os
 from collections import defaultdict
 from datetime import datetime
+import os
+from glob import glob
+import duckdb
 
 def analyze_director_compensation(file_path):
     """Analyze director compensation data."""
