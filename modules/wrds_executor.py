@@ -307,3 +307,15 @@ class WRDSQueryRunner:
             CSVExporter.export(df, f"{ticker}_{start_year}_{end_year}_comp_northamerica_fundamentals_annual.csv", ticker_path)
         else:
             print(f"No fundamentals data found for {ticker} between {start_year} and {end_year}")
+
+    def execute_raw_sql(self, query: str) -> pd.DataFrame:
+        """
+        Execute a raw SQL query and return the result as a pandas DataFrame.
+        
+        Args:
+            query (str): Raw SQL query to execute.
+        
+        Returns:
+            pd.DataFrame: Query results as a DataFrame.
+        """
+        return pd.read_sql(query, self.conn)

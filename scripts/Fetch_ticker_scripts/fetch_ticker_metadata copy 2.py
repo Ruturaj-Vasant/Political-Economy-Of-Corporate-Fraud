@@ -6,7 +6,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 # Import the WRDS runner from project modules
 from modules.wrds_executor import WRDSQueryRunner
 
-def fetch_wrds_ticker_metadata(wrds_runner, existing_keys=None):
+def fetch_wrds_ticker_metadata(wrds_runner, existing_data=None):
     """
     Fetch all tickers and corresponding identifiers using WRDSQueryRunner.
     """
@@ -36,9 +36,15 @@ def fetch_wrds_ticker_metadata(wrds_runner, existing_keys=None):
     merged['gvkey'] = merged['gvkey'].fillna('')
 
     new_entries = {}
-    for i, row in enumerate(merged.itertuples(), start=(max(existing_keys) + 1) if existing_keys else 1):
+    for i, row in enumerate(merged.itertuples(), start=1):
         is_del = row.permno in delisted_set
         cleaned_ticker = f"{row.ticker}-DELISTED" if is_del else row.ticker
+
+        source_value = "SEC, WRDS" if not existing_data or row.ticker not in existing_data else (
+            existing_data[row.ticker].get("source", "SEC") + ", WRDS"
+            if "wrds" not in existing_data[row.ticker].get("source", "").lower()
+            else existing_data[row.ticker]["source"]
+        )
 
         new_entries[str(i)] = {
             "cik_str": None,
@@ -47,13 +53,13 @@ def fetch_wrds_ticker_metadata(wrds_runner, existing_keys=None):
             "permno": int(row.permno) if pd.notna(row.permno) else None,
             "gvkey": row.gvkey if row.gvkey != '' else None,
             "delisted": is_del,
-            "source": "WRDS"
+            "source": source_value
         }
 
     return new_entries
 
 def main():
-    metadata_path = Path(__file__).resolve().parent.parent[2] / "metadata/sec_company_tickers.json"
+    metadata_path = Path(__file__).resolve().parents[1] / "metadata/sec_company_tickers.json"
     if metadata_path.exists():
         with open(metadata_path) as f:
             existing_data = json.load(f)
@@ -64,7 +70,7 @@ def main():
     existing_keys = [int(k) for k in existing_data.keys()]
     max_index = max(existing_keys) if existing_keys else -1
     wrds_runner = WRDSQueryRunner()
-    wrds_data = fetch_wrds_ticker_metadata(wrds_runner, existing_keys=existing_keys)
+    wrds_data = fetch_wrds_ticker_metadata(wrds_runner, existing_data=existing_data)
 
     # Merge WRDS data into existing JSON
     for key, entry in wrds_data.items():
