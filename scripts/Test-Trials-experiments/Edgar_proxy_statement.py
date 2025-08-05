@@ -5,17 +5,17 @@ from edgar import *
 set_identity('ruturaj@gmail.com')
 
 # Choose the ticker
-ticker = 'MSFT'
+ticker = 'AAPL'
 company = Company(ticker)
 print(f"Company Name: {getattr(company, 'name', 'N/A')}, CIK: {getattr(company, 'cik', 'N/A')}")
 
 # # Fetch all DEF 14A filings
-# proxy_filings = company.get_filings(form='DEF 14A')
-# print(f"Total DEF 14A Filings Found: {len(proxy_filings)}")
+proxy_filings = company.get_filings(form='DEF 14A')
+print(f"Total DEF 14A Filings Found: {len(proxy_filings)}")
 
 # Fetch all 10-K filings
-proxy_filings = company.get_filings(form='10-K')
-print(f"Total 10-K Filings Found: {len(proxy_filings)}")
+# proxy_filings = company.get_filings(form='10-K')
+# print(f"Total 10-K Filings Found: {len(proxy_filings)}")
 
 print(proxy_filings)
 
@@ -32,8 +32,8 @@ for i, filing in enumerate(proxy_filings):
         filing_date = getattr(filing, "filing_date", None)
         if not filing_date:
             filing_date = f"filing_{i+1}"
-        # filename = os.path.join(base_path, f"{filing_date}_DEF14A.txt")
-        filename = os.path.join(base_path, f"{filing_date}_10K.txt")
+        filename = os.path.join(base_path, f"{filing_date}_DEF14A.txt")
+        # filename = os.path.join(base_path, f"{filing_date}_10K.txt")
 
         # Save filing text
         text = filing.text()

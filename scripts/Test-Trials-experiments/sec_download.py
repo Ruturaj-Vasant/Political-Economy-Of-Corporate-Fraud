@@ -31,5 +31,6 @@ print(f"XBRL Available: {filings_10k.is_xbrl}")
 print("\nLatest DEF 14A Filing:")
 # print(f"Filing: {filings_def14a.html()}")
 
-print(f"Filing: {filings_def14a.open()}")
+# print(f"Filing: {filings_def14a.open()}")
 # print(pd.DataFrame(filings_def14a.view()))
+print(pd.DataFrame(filings_10k.html()))
