@@ -1,0 +1,106 @@
+import os
+import re
+from bs4 import BeautifulSoup
+import pandas as pd
+import io as StringIO
+
+def clean_table(df):
+    df.columns = [str(col).strip().lower() for col in df.columns]
+    df = df.dropna(how='all', axis=1)
+    df = df.dropna(how='all', axis=0)
+    return df
+
+def clean_and_fix_table(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.dropna(how="all").reset_index(drop=True)
+
+    header_row_idx = None
+    for i, row in df.iterrows():
+        row_str = " ".join(str(x).lower() for x in row)
+        if "salary" in row_str and "name" in row_str:
+            header_row_idx = i
+            break
+
+    if header_row_idx is not None:
+        df.columns = df.iloc[header_row_idx]
+        df = df.iloc[header_row_idx + 1:].reset_index(drop=True)
+    else:
+        df.columns = [str(c).strip() for c in df.columns]
+
+    df = df.dropna(axis=1, how="all")
+    df.columns = [re.sub(r"\s+", " ", str(col)).strip() for col in df.columns]
+    df.columns = [col.replace("\n", " ").replace("\xa0", " ") for col in df.columns]
+    df = df.loc[:, ~df.columns.duplicated()]
+    return df
+
+def is_summary_comp_table(df: pd.DataFrame) -> bool:
+    SALARY = re.compile(r"salary", re.I)
+    if any(SALARY.search(str(col)) for col in df.columns):
+        return True
+    for col in df.columns:
+        for cell in df[col]:
+            if SALARY.search(str(cell)):
+                return True
+    return False
+
+def extract_summary_compensation_table(filepath: str) -> pd.DataFrame:
+    """
+    Extracts the Summary Compensation Table (SCT) from a local DEF 14A HTML file.
+    """
+    TEXT_FIND = (
+        r"(name\s*(and|/|&)?\s*(principal)?\s*position)"
+        r"|principal\s*position"
+        r"|name\s*[/&]"
+        r"|named\s+executive\s+(officers?|positions?)"
+    )
+    SALARY = re.compile(r"salary", re.I)
+
+    with open(filepath, "r", encoding="utf-8") as f:
+        html = f.read()
+
+    soup = BeautifulSoup(html, "lxml")
+    elements = soup.find_all(string=re.compile(TEXT_FIND, re.I))
+
+    for el in elements:
+        try:
+            table = el.find_parent("table")
+            if not table:
+                continue
+
+            table_html = str(table)
+            df_list = pd.read_html(StringIO.StringIO(table_html), flavor="html5lib")
+
+            if not df_list:
+                continue
+
+            df = df_list[0]
+
+            if is_summary_comp_table(df):
+                return clean_and_fix_table(df)
+
+        except Exception:
+            continue
+
+    return None
+
+def main():
+    ticker = input("Enter the ticker symbol: ").strip().upper()
+    filepath = os.path.join("data", ticker)
+
+    for filename in os.listdir(filepath)[:2]:
+        if filename.endswith(".html"):
+            full_path = os.path.join(filepath, filename)
+            print(f"Processing file: {filename}")
+            df = extract_summary_compensation_table(full_path)
+            if df is not None:
+                print("Summary Compensation Table found:")
+                print(df)
+                output_path = os.path.join(filepath,"extracted", f"{ticker}_SCT.csv")
+                os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                with open(output_path, "w", encoding="utf-8", newline='') as f:
+                    df.to_csv(f, index=False)
+                    print(f"Summary Compensation Table saved to {output_path}")
+            else:
+                print("No Summary Compensation Table found in this file.")
+
+if __name__ == "__main__":
+    main()
