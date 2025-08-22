@@ -14,9 +14,11 @@ def clean_and_fix_table(df: pd.DataFrame) -> pd.DataFrame:
     df = df.dropna(how="all").reset_index(drop=True)
 
     header_row_idx = None
-    for i, row in df.iterrows():
-        row_str = " ".join(str(x).lower() for x in row)
-        if "salary" in row_str and "name" in row_str:
+    keywords = ["name", "salary", "bonus", "option", "total", "stock"]
+    for i in range(min(len(df), 5)):
+        row = df.iloc[i].astype(str).str.lower()
+        keyword_count = sum(any(k in cell for k in keywords) for cell in row)
+        if keyword_count >= 2:
             header_row_idx = i
             break
 
@@ -90,17 +92,33 @@ def main():
         if filename.endswith(".html"):
             full_path = os.path.join(filepath, filename)
             print(f"Processing file: {filename}")
-            df = extract_summary_compensation_table(full_path)
+            # Updated logic according to instructions
+            anchors = []  # This should be obtained from somewhere, placeholder here
+            df = None
+            for href, text in anchors:
+                print(f"Anchor: {href} | Text: {text}")
+                anchor_id = href.lstrip("#")
+                df = extract_table_after_anchor(full_path, anchor_id)
+                break  # only use the first anchor
+
+            if not anchors:
+                print("No SCT anchors found, using regex fallback...")
+                df = extract_summary_compensation_table(full_path)
+
             if df is not None:
-                print("Summary Compensation Table found:")
-                print(df)
-                output_path = os.path.join(filepath,"extracted", f"{ticker}_SCT.csv")
-                os.makedirs(os.path.dirname(output_path), exist_ok=True)
-                with open(output_path, "w", encoding="utf-8", newline='') as f:
-                    df.to_csv(f, index=False)
-                    print(f"Summary Compensation Table saved to {output_path}")
+                keywords = ["name", "salary", "bonus", "option", "total", "stock"]
+                column_headers = [str(col).lower() for col in df.columns]
+                keyword_count = sum(any(k in col for col in column_headers) for k in keywords)
+                if keyword_count < 2:
+                    print("Table does not contain enough relevant columns. Skipping file.")
+                    continue
+                year = filename.split("-")[0]
+                output_file = os.path.join(filepath, "extracted", f"{ticker}_{year}_SCT.csv")
+                os.makedirs(os.path.dirname(output_file), exist_ok=True)
+                df.to_csv(output_file, index=False)
+                print(f"Saved table to {output_file}")
             else:
-                print("No Summary Compensation Table found in this file.")
+                print("Regex extraction failed.")
 
 if __name__ == "__main__":
     main()
