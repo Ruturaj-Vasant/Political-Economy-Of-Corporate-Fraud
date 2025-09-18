@@ -15,6 +15,7 @@ def extract_sct_anchors_from_file(filepath):
 
     xpath_expr = "//a[starts-with(@href, '#') and contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'summary compensation table')]"
     anchors = tree.xpath(xpath_expr)
+    print(f"Found anchor links: {anchors}")
     
     results = []
     for a in anchors:
@@ -30,6 +31,7 @@ def process_ticker_directory(ticker):
             full_path = os.path.join(directory, filename)
             print(f"\nProcessing: {filename}")
             anchors = extract_sct_anchors_from_file(full_path)
+            
             df = None
             if anchors:
                 for href, text in anchors:
@@ -112,11 +114,9 @@ def extract_table_after_anchor(filepath, anchor_id):
 
     try:
         print("Reading table...")
-        # print(df.head())
         df = pd.read_html(html.tostring(table[0]), header=None)[0]
-        # print(df.head())
         keywords = ["name", "salary", "bonus", "option", "stock", "total"]
-        max_rows_to_check = 3
+        max_rows_to_check = 10
         header_candidate = df.iloc[:max_rows_to_check].astype(str).fillna("").agg(" ".join, axis=0).str.lower()
         keyword_count = sum(any(k in cell for k in keywords) for cell in header_candidate)
 
