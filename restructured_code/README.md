@@ -88,8 +88,8 @@ SEC Downloads Web UI (browse JSON)
 Run locally:
 - From repo root, start a static server:
   `python3 -m http.server 8000`
-- Open `http://localhost:8000/web/index.html`
-- The page will try to load `../restructured_code/json/sec_company_tickers.json`.
+- Open `http://localhost:8000/restructured_code/web/index.html`
+- The page will try to load `../json/sec_company_tickers.json`.
   - If it fails, paste a different path or upload a JSON file using the UI.
 
 Notes:

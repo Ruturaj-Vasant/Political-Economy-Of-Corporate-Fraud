@@ -8,7 +8,7 @@
     loadedPath: '',
   };
 
-  const DEFAULT_JSON_PATH = '../restructured_code/json/sec_company_tickers.json';
+  const DEFAULT_JSON_PATH = '../json/sec_company_tickers.json';
 
   function setStatus(msg, ok = true) {
     const el = $('#loadStatus');
@@ -219,4 +219,3 @@
   // attempt initial load
   loadFromPath(DEFAULT_JSON_PATH);
 })();
-
