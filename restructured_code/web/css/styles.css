@@ -1,10 +1,11 @@
 :root {
-  --bg: #0b0c10;
-  --fg: #e5e7eb;
-  --muted: #9aa0a6;
-  --accent: #4f46e5;
-  --card: #111218;
-  --border: #1f2330;
+  /* Light theme palette */
+  --bg: #ffffff;
+  --fg: #111827;   /* slate-900 */
+  --muted: #6b7280; /* gray-500 */
+  --accent: #2563eb; /* blue-600 */
+  --card: #ffffff;
+  --border: #e5e7eb; /* gray-200 */
 }
 
 * { box-sizing: border-box; }
@@ -21,15 +22,22 @@ header h1 { margin: 0 0 4px; font-size: 22px; }
 .file-label input { display: none; }
 .muted { color: var(--muted); font-size: 12px; }
 .or { color: var(--muted); }
+.small { font-size: 11px; }
+.hidden { display: none; }
+
+.mode { display: flex; gap: 12px; align-items: center; }
+.mode label { display: flex; gap: 6px; align-items: center; }
 
 .controls select, .controls input[type="text"] { background: var(--card); color: var(--fg); border: 1px solid var(--border); padding: 6px 8px; border-radius: 6px; }
-.controls button, .loader-bar button { background: var(--accent); color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; }
-.controls button:hover, .loader-bar button:hover { filter: brightness(1.1); }
+.controls textarea { background: var(--card); color: var(--fg); border: 1px solid var(--border); padding: 8px; border-radius: 6px; width: 100%; max-width: 900px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+.controls button, .loader-bar button { background: var(--accent); color: #ffffff; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; }
+.controls button:hover, .loader-bar button:hover { filter: brightness(0.95); }
+.json-actions { display: flex; gap: 10px; align-items: center; }
 
 main { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; padding: 12px 20px; }
 
 #results { min-height: 200px; }
-.card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-bottom: 10px; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-bottom: 10px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
 .row { display: grid; grid-template-columns: 120px 1fr 120px; gap: 10px; align-items: center; }
 .kv { display: grid; grid-template-columns: 120px 1fr; gap: 6px; }
 .kv div.key { color: var(--muted); }
@@ -46,4 +54,3 @@ main { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; padding: 12px 2
   main { grid-template-columns: 1fr; }
   .row { grid-template-columns: 1fr; gap: 6px; }
 }
-

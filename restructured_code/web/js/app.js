@@ -6,6 +6,7 @@
     raw: {},
     rows: [], // array of {id, ...fields}
     loadedPath: '',
+    mode: 'simple',
   };
 
   const DEFAULT_JSON_PATH = '../json/sec_company_tickers.json';
@@ -176,6 +177,95 @@
     }
   }
 
+  // ---------------- JSON Query mode -----------------
+  function runJsonQuery() {
+    const text = $('#jsonQuery').value.trim();
+    if (!text) {
+      setStatus('Enter a JSON query to run.', false);
+      return renderResults([]);
+    }
+    let expr;
+    try {
+      expr = JSON.parse(text);
+    } catch (e) {
+      setStatus('Invalid JSON: ' + e.message, false);
+      return renderResults([]);
+    }
+    const out = [];
+    for (const r of state.rows) {
+      if (evaluateExpr(expr, r)) {
+        out.push(r);
+        if (out.length >= 500) break;
+      }
+    }
+    setStatus(`Query matched ${out.length} records`);
+    renderResults(out);
+  }
+
+  function evaluateExpr(expr, row) {
+    // Supports:
+    // { field: value } -> equality (case-insensitive for strings)
+    // { field: { $eq, $neq, $in, $contains, $gt, $lt } }
+    // { $and: [ ... ] }, { $or: [ ... ] }
+    if (!expr || typeof expr !== 'object') return false;
+    if (Array.isArray(expr)) {
+      // All must be true
+      return expr.every((e) => evaluateExpr(e, row));
+    }
+    if ('$and' in expr) {
+      const arr = expr.$and;
+      return Array.isArray(arr) && arr.every((e) => evaluateExpr(e, row));
+    }
+    if ('$or' in expr) {
+      const arr = expr.$or;
+      return Array.isArray(arr) && arr.some((e) => evaluateExpr(e, row));
+    }
+    // field conditions
+    for (const [k, v] of Object.entries(expr)) {
+      if (!evaluateField(k, v, row)) return false;
+    }
+    return true;
+  }
+
+  function evaluateField(field, cond, row) {
+    const val = row[field];
+    if (cond && typeof cond === 'object' && !Array.isArray(cond)) {
+      // operator object
+      if ('$eq' in cond) return cmpEq(val, cond.$eq);
+      if ('$neq' in cond) return !cmpEq(val, cond.$neq);
+      if ('$in' in cond && Array.isArray(cond.$in)) return cond.$in.some((x) => cmpEq(val, x));
+      if ('$contains' in cond) return contains(val, cond.$contains);
+      if ('$gt' in cond) return num(val) > num(cond.$gt);
+      if ('$lt' in cond) return num(val) < num(cond.$lt);
+      return false;
+    }
+    // equality
+    return cmpEq(val, cond);
+  }
+
+  function cmpEq(a, b) {
+    const na = normStr(a);
+    const nb = normStr(b);
+    if (na === '' && nb === '') return true;
+    // numeric compare
+    if (/^[-]?\d+(?:\.\d+)?$/.test(na) && /^[-]?\d+(?:\.\d+)?$/.test(nb)) {
+      return Number(na) === Number(nb);
+    }
+    return na.toUpperCase() === nb.toUpperCase();
+  }
+
+  function contains(a, b) {
+    const na = normStr(a).toUpperCase();
+    const nb = normStr(b).toUpperCase();
+    if (!nb) return true;
+    return na.includes(nb);
+  }
+
+  function num(x) {
+    const n = Number(normStr(x));
+    return isFinite(n) ? n : NaN;
+  }
+
   function showDetails(rec) {
     const aside = $('#details');
     aside.classList.remove('hidden');
@@ -214,6 +304,30 @@
     if (e.key === 'Enter') {
       $('#searchBtn').click();
     }
+  });
+
+  // Mode switch
+  $$("input[name='mode']").forEach((el) => {
+    el.addEventListener('change', (e) => {
+      state.mode = e.target.value;
+      const simple = state.mode === 'simple';
+      $('#simpleControls').classList.toggle('hidden', !simple);
+      $('#jsonControls').classList.toggle('hidden', simple);
+      renderResults([]);
+      setStatus(simple ? 'Simple mode' : 'JSON query mode');
+    });
+  });
+
+  // JSON query actions
+  $('#runJsonBtn').addEventListener('click', runJsonQuery);
+  $('#insertExample').addEventListener('click', (e) => {
+    e.preventDefault();
+    $('#jsonQuery').value = JSON.stringify({
+      "$or": [
+        { "ticker": "AAPL" },
+        { "permno": 14593 }
+      ]
+    }, null, 2);
   });
 
   // attempt initial load
