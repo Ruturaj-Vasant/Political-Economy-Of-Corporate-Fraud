@@ -23,6 +23,14 @@
 
     <section class="controls">
       <div class="control-row">
+        <div class="mode">
+          <label><input type="radio" name="mode" value="simple" checked /> Simple</label>
+          <label><input type="radio" name="mode" value="json" /> JSON Query</label>
+        </div>
+        <span id="stats" class="muted"></span>
+      </div>
+
+      <div id="simpleControls" class="control-row">
         <label for="fieldSelect">Field:</label>
         <select id="fieldSelect">
           <option value="auto">Auto</option>
@@ -35,7 +43,16 @@
         </select>
         <input id="query" type="text" placeholder="Enter search value (e.g., AAPL, 037833100, 14593, 001690)" size="50" />
         <button id="searchBtn">Search</button>
-        <span id="stats" class="muted"></span>
+      </div>
+
+      <div id="jsonControls" class="control-row hidden">
+        <label for="jsonQuery">Query:</label>
+        <textarea id="jsonQuery" rows="6" cols="80" placeholder='{"$or": [{"ticker": "AAPL"}, {"permno": 14593}]}'></textarea>
+        <div class="json-actions">
+          <button id="runJsonBtn">Run Query</button>
+          <a href="#" id="insertExample" class="muted">Insert example</a>
+          <span class="muted small">Supports: $and, $or, $in, $contains, $eq, $neq, $gt, $lt</span>
+        </div>
       </div>
     </section>
 
