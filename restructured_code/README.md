@@ -81,3 +81,18 @@ Notes
 Planned next steps:
 - Add checkpointing, resume, and per-batch parquet cache for ~16K tickers
 - Schema validation for outputs and a summary report
+SEC Downloads Web UI (browse JSON)
+- Static web page to search companies by ticker, CUSIP, PERMNO, GVKEY, CIK, or title.
+- Files live under `web/` and read the JSON you load (defaults to `../restructured_code/json/sec_company_tickers.json`).
+
+Run locally:
+- From repo root, start a static server:
+  `python3 -m http.server 8000`
+- Open `http://localhost:8000/web/index.html`
+- The page will try to load `../restructured_code/json/sec_company_tickers.json`.
+  - If it fails, paste a different path or upload a JSON file using the UI.
+
+Notes:
+- The UI does not modify your data; it only reads and displays it.
+- Searches cap at 200 results for responsiveness; refine your query if needed.
+- The layout adapts to whatever fields your JSON contains, so it remains useful as the schema grows.

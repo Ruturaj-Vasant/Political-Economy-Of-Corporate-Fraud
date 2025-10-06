@@ -1,0 +1,49 @@
+:root {
+  --bg: #0b0c10;
+  --fg: #e5e7eb;
+  --muted: #9aa0a6;
+  --accent: #4f46e5;
+  --card: #111218;
+  --border: #1f2330;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; height: 100%; }
+body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); color: var(--fg); }
+
+header { padding: 20px; border-bottom: 1px solid var(--border); }
+header h1 { margin: 0 0 4px; font-size: 22px; }
+.subtitle { margin: 0; color: var(--muted); font-size: 13px; }
+
+.loader-bar, .controls { padding: 12px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.loader-bar input[type="text"] { background: var(--card); color: var(--fg); border: 1px solid var(--border); padding: 6px 8px; border-radius: 6px; }
+.file-label { border: 1px dashed var(--border); padding: 6px 10px; border-radius: 6px; cursor: pointer; }
+.file-label input { display: none; }
+.muted { color: var(--muted); font-size: 12px; }
+.or { color: var(--muted); }
+
+.controls select, .controls input[type="text"] { background: var(--card); color: var(--fg); border: 1px solid var(--border); padding: 6px 8px; border-radius: 6px; }
+.controls button, .loader-bar button { background: var(--accent); color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; }
+.controls button:hover, .loader-bar button:hover { filter: brightness(1.1); }
+
+main { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; padding: 12px 20px; }
+
+#results { min-height: 200px; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-bottom: 10px; }
+.row { display: grid; grid-template-columns: 120px 1fr 120px; gap: 10px; align-items: center; }
+.kv { display: grid; grid-template-columns: 120px 1fr; gap: 6px; }
+.kv div.key { color: var(--muted); }
+.kv div.val { color: var(--fg); word-break: break-word; }
+.actions { display: flex; gap: 6px; justify-content: flex-end; }
+
+#details { position: sticky; top: 12px; height: fit-content; }
+#details.hidden { display: none; }
+.details-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.details-table th, .details-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.details-table th { color: var(--muted); width: 140px; }
+
+@media (max-width: 960px) {
+  main { grid-template-columns: 1fr; }
+  .row { grid-template-columns: 1fr; gap: 6px; }
+}
+

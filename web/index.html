@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Company Lookup</title>
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Company Lookup</h1>
+      <p class="subtitle">Search by ticker, CUSIP, PERMNO, GVKEY, CIK, or title</p>
+    </header>
+
+    <section class="loader-bar">
+      <label for="jsonPath">JSON path:</label>
+      <input id="jsonPath" type="text" size="60" value="../restructured_code/json/sec_company_tickers.json" />
+      <button id="loadBtn">Load</button>
+      <span class="or">or</span>
+      <label class="file-label">Upload JSON <input id="fileInput" type="file" accept="application/json" /></label>
+      <span id="loadStatus" class="muted"></span>
+    </section>
+
+    <section class="controls">
+      <div class="control-row">
+        <label for="fieldSelect">Field:</label>
+        <select id="fieldSelect">
+          <option value="auto">Auto</option>
+          <option value="ticker">ticker</option>
+          <option value="cusip">cusip</option>
+          <option value="permno">permno</option>
+          <option value="gvkey">gvkey</option>
+          <option value="cik_str">cik_str</option>
+          <option value="title">title</option>
+        </select>
+        <input id="query" type="text" placeholder="Enter search value (e.g., AAPL, 037833100, 14593, 001690)" size="50" />
+        <button id="searchBtn">Search</button>
+        <span id="stats" class="muted"></span>
+      </div>
+    </section>
+
+    <main>
+      <div id="results"></div>
+      <aside id="details" class="hidden"></aside>
+    </main>
+
+    <footer>
+      <p class="muted">Data source: restructured JSON. This UI reads whatever JSON you load.</p>
+    </footer>
+
+    <script src="js/app.js"></script>
+  </body>
+  </html>
+
