@@ -21,17 +21,34 @@ import sys
 import time
 from typing import List, Optional
 
-from ..config import load_config
-from ..clients.edgar_client import (
-    init_identity,
-    list_filings_for_ticker,
-    fetch_html,
-    fetch_text,
-    FilingRef,
-)
-from ..storage.backends import LocalStorage
-from .file_naming import build_rel_paths
-from .validator import basic_html_check, smoke_test_def14a
+try:
+    # Preferred: when run as a module (python -m restructured_code.main.sec.downloads.interactive)
+    from ..config import load_config
+    from ..clients.edgar_client import (
+        init_identity,
+        list_filings_for_ticker,
+        fetch_html,
+        fetch_text,
+        FilingRef,
+    )
+    from ..storage.backends import LocalStorage
+    from .file_naming import build_rel_paths
+    from .validator import basic_html_check, smoke_test_def14a
+except ImportError:
+    # Fallback: allow running this file directly via python path/to/interactive.py
+    import os, sys
+    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..')))
+    from restructured_code.main.sec.config import load_config
+    from restructured_code.main.sec.clients.edgar_client import (
+        init_identity,
+        list_filings_for_ticker,
+        fetch_html,
+        fetch_text,
+        FilingRef,
+    )
+    from restructured_code.main.sec.storage.backends import LocalStorage
+    from restructured_code.main.sec.downloads.file_naming import build_rel_paths
+    from restructured_code.main.sec.downloads.validator import basic_html_check, smoke_test_def14a
 
 
 FORMS = {
@@ -86,14 +103,15 @@ def _prompt_save_method() -> Optional[str]:
 
 def _save_html(storage: LocalStorage, ticker: str, form: str, f: FilingRef, html_bytes: bytes, min_size: int, smoke_def14a: bool) -> None:
     html_rel, _ = build_rel_paths(storage.root.as_posix(), ticker, form, f.filing_date)
-    ok, bits = basic_html_check(html_bytes, min_size)
+    ok, reason = basic_html_check(html_bytes, min_size)
     meta = {
         "ticker": ticker,
         "form": form,
         "filing_date": f.filing_date,
         "url": f.url,
         "saved_as": "html",
-        **{"html_ok": ok, "html_reason": bits[1] if isinstance(bits, tuple) else None},
+        "html_ok": ok,
+        "html_reason": reason,
     }
     if not ok:
         raise ValueError("HTML validation failed")
@@ -204,4 +222,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
