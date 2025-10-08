@@ -138,35 +138,35 @@ def _latest_per_year(rows: List[Dict]) -> List[Dict]:
 
 @app.route('/api/filings')
 def api_filings():
+    """List filings from the local data/ folder.
+
+    If `ticker` is provided, list only under that ticker. If omitted, list all
+    tickers. If `forms` provided (comma-separated), filter to those forms; otherwise
+    return all forms.
+    """
     ticker = (request.args.get('ticker') or '').upper().strip()
     forms = [f for f in (request.args.get('forms') or '').split(',') if f]
-    years = request.args.get('years') or ''
-    latest = (request.args.get('latest') or '0') == '1'
-    if not ticker:
-        return jsonify({ 'results': [] })
     if not forms:
         forms = FORMS
-    yr = None
-    if years:
-        try:
-            if ':' in years:
-                a,b = years.split(':',1)
-                yr = (int(a), int(b))
-            else:
-                y = int(years)
-                yr = (y, y)
-        except Exception:
-            yr = None
 
     results: List[Dict] = []
-    for form in forms:
-        for p in _list_form_files(ticker, form):
-            results.append(_parse_entry(p, ticker, form))
-    results = _filter_by_years(results, yr)
-    results.sort((lambda a,b=None: 0), reverse=False)  # no-op to keep stable
+    tickers: List[str] = []
+    if ticker:
+        tickers = [ticker]
+    else:
+        # Enumerate all ticker directories under DATA_ROOT
+        if DATA_ROOT.exists():
+            for p in sorted(DATA_ROOT.iterdir()):
+                if p.is_dir():
+                    tickers.append(p.name)
+
+    for t in tickers:
+        for form in forms:
+            for p in _list_form_files(t, form):
+                results.append(_parse_entry(p, t, form))
+
+    # Sort by date desc
     results.sort(key=lambda r: (r.get('filing_date') or ''), reverse=True)
-    if latest:
-        results = _latest_per_year(results)
     return jsonify({ 'results': results })
 
 

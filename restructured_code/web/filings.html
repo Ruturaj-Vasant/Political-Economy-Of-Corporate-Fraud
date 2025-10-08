@@ -17,27 +17,15 @@
     </nav>
 
     <section class="controls">
-      <div class="control-row" style="gap:14px; align-items: flex-end; flex-wrap: wrap;">
-        <div>
-          <label for="ticker">Ticker</label><br/>
-          <input id="ticker" type="text" placeholder="e.g., AAPL" size="12" />
-          <button id="loadTickersBtn" class="muted" title="Load tickers from JSON for suggestions">↻</button>
-          <span id="tickerHint" class="muted"></span>
-        </div>
-        <div>
-          <label>Forms</label><br/>
-          <div id="formsBox" class="card" style="padding:8px; max-height:120px; overflow:auto; min-width:280px;"></div>
-        </div>
-        <div>
-          <button id="searchBtn">Search Filings</button>
-          <span id="status" class="muted"></span>
-        </div>
+      <div class="control-row" style="gap:14px; align-items: center; flex-wrap: wrap;">
+        <div><strong>All Filings</strong> <span id="status" class="muted"></span></div>
+        <div><button id="refreshBtn">Refresh</button></div>
       </div>
     </section>
 
-    <main style="display:grid; grid-template-columns: 2fr 1fr; gap:12px; padding:12px 20px;">
-      <div>
-        <div id="results"></div>
+    <main style="display:grid; grid-template-columns: 1fr 2fr; gap:12px; padding:12px 20px;">
+      <div class="card" style="padding:0; overflow:auto; max-height:80vh;">
+        <ul id="fileList" style="list-style:none; margin:0; padding:0;"></ul>
       </div>
       <aside>
         <div class="card">
@@ -46,7 +34,6 @@
         </div>
       </aside>
     </main>
-
-    <script src="js/filings.js"></script>
+    <script src="js/filings_all.js"></script>
   </body>
   </html>
