@@ -170,6 +170,25 @@ def api_filings():
     return jsonify({ 'results': results })
 
 
+@app.route('/api/download', methods=['POST','OPTIONS'])
+def api_download():
+    if request.method == 'OPTIONS':
+        return ('', 204)
+    try:
+        payload = request.get_json(force=True)
+    except Exception:
+        return jsonify({ 'error': 'invalid JSON' }), 400
+    ticker = (payload.get('ticker') or '').upper().strip()
+    forms = payload.get('forms') or []
+    if not ticker or not forms:
+        return jsonify({ 'error': 'ticker and forms are required' }), 400
+    try:
+        from restructured_code.main.sec.downloads.downloader import download_filings_for_ticker
+        download_filings_for_ticker(ticker, forms=forms, years=None)
+        return jsonify({ 'status': 'ok', 'ticker': ticker, 'forms': forms })
+    except Exception as e:
+        return jsonify({ 'error': str(e) }), 500
+
+
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=5000, debug=False)
-
