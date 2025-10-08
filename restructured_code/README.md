@@ -96,3 +96,45 @@ Notes:
 - The UI does not modify your data; it only reads and displays it.
 - Searches cap at 200 results for responsiveness; refine your query if needed.
 - The layout adapts to whatever fields your JSON contains, so it remains useful as the schema grows.
+
+SEC Downloads (new, modular under `restructured_code/main/sec/`)
+- Output naming (default): `data/<TICKER>/<FORM>/<FILING_DATE>_<FORM>.<ext>`
+  - Example: `data/AAPL/DEF 14A/2002-03-21_DEF 14A.html`
+  - Keeps forms segregated to avoid clutter within each ticker directory.
+- Forms supported now: 10-K, DEF 14A, 10-Q, 13F-HR, 8-K, 3/4/5, NPORT-P, D, C, MA-I, 144.
+- Validation (on by default):
+  - Non‑empty, minimum size (2KB), parseable by lxml/bs4, and no obvious block pages.
+  - Optional smoke test (off by default): for DEF 14A, a quick scan for SCT anchors/phrases.
+    - If enabled and it fails, meta includes `extract_smoke_ok: false` for manual review.
+- Resume semantics:
+  - If a file exists without `meta.json`, we compute checksum + meta and validate it.
+  - If valid, it is treated as done; if not, it’s re‑downloaded once with backoff.
+- Controls (non‑interactive CLI, batch/HPC‑friendly):
+  - `--forms` (e.g., `"DEF 14A,10-K"`)
+  - `--tickers AAPL,MSFT` | `--tickers-file path` | `--all` (from `restructured_code/json/sec_company_tickers.json`)
+  - `--years 2018:2025` or `--dates 2018-01-01:2024-12-31`
+  - `--latest-per-year` (optional: pick most recent filing each year)
+  - `--max-per-ticker N` (optional cap)
+  - `--include-doc-substr` / `--exclude-doc-substr` (filter primaryDocument names)
+  - `--resume` (skip existing valid files)
+  - `--verify` (on by default)
+  - `--save html|txt` (default html with fallback to txt when needed)
+  - `--user-agent you@example.com`
+  - `--concurrency 2` (polite, with 0.5s interval per process)
+- Config knobs (`restructured_code/main/sec/config.py`):
+  - `data_root` (default `data/`), `user_agent`, `min_interval_seconds`, `max_retries`, `min_html_size_bytes`, `smoke_test_def14a`.
+- HPC
+  - Use shard splitter (to be added) to split tickers across array jobs.
+  - Each task runs with modest concurrency (2) and respect for rate limits.
+
+Interactive mode (terminal prompts)
+- Run the interactive downloader that mirrors legacy menus and behavior:
+  `PYTHONPATH=. python3 -m restructured_code.main.sec.downloads.interactive`
+- Flow:
+  1) Choose a form (e.g., DEF 14A)
+  2) Enter tickers (comma-separated)
+  3) Choose save method:
+     - Open in browser (local only)
+     - Save as text (.txt)
+     - Save as HTML (.html); if invalid/unavailable, falls back to text
+- Files are written to `data/<TICKER>/<FORM>/<DATE>_<FORM>.<ext>` with a sidecar meta.json.
