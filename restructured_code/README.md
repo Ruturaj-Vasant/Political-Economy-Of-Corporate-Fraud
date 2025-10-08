@@ -2,7 +2,7 @@ Restructured sandbox for SEC/WRDS enrichment (safe, self-contained)
 
 - Legacy: `restructured_code/legacy/` reference-only copy of earlier scripts
 - Working JSON: `restructured_code/json/sec_company_tickers.json`
-- Tools: `restructured_code/main/` modular enrichment + sync utilities
+- Tools: `restructured_code/wrds/` modular enrichment + sync utilities
 
 Run CLI locally without installation:
 
@@ -25,46 +25,46 @@ What these tools do
 Update JSON with WRDS (permno/gvkey/etc.)
 
 1) Optional: probe a ticker (AAPL) to verify access
-   `PYTHONPATH=. python restructured_code/main/wrds_probe_aapl.py`
+   `PYTHONPATH=. python3 -m restructured_code.wrds.tools.probe_aapl`
 
 2) Dry-run over a small sample (no file writes)
-   `PYTHONPATH=. python3 -m restructured_code.main.update_json \
+   `PYTHONPATH=. python3 -m restructured_code.wrds.update_json \
       --input restructured_code/json/sec_company_tickers.json \
       --limit 200 --dry-run --batch-size 500 \
       --changes-csv restructured_code/json/enrich_changes_sample.csv`
 
 3) Write an enriched copy (safe, non-destructive)
-   `PYTHONPATH=. python3 -m restructured_code.main.update_json \
+   `PYTHONPATH=. python3 -m restructured_code.wrds.update_json \
       --input restructured_code/json/sec_company_tickers.json \
       --output restructured_code/json/sec_company_tickers.enriched.json \
       --batch-size 500 --changes-csv restructured_code/json/enrich_changes_full.csv`
 
 4) Overwrite in place with automatic .bak
-   `PYTHONPATH=. python3 -m restructured_code.main.update_json \
+   `PYTHONPATH=. python3 -m restructured_code.wrds.update_json \
       --input restructured_code/json/sec_company_tickers.json \
       --in-place --batch-size 500 \
       --changes-csv restructured_code/json/enrich_changes_full.csv`
 
 Update only CIKs (fill missing cik_str)
 - Dry-run (no writes):
-  `PYTHONPATH=. python3 -m restructured_code.main.update_cik \
+  `PYTHONPATH=. python3 -m restructured_code.wrds.update_cik \
      --input restructured_code/json/sec_company_tickers.json \
      --limit 200 --dry-run --batch-size 500 \
      --changes-csv restructured_code/json/cik_changes_sample.csv`
 - In-place update (writes .bak + CSV log):
-  `PYTHONPATH=. python3 -m restructured_code.main.update_cik \
+  `PYTHONPATH=. python3 -m restructured_code.wrds.update_cik \
      --input restructured_code/json/sec_company_tickers.json \
      --in-place --batch-size 500 \
      --changes-csv restructured_code/json/cik_changes_full.csv`
 
 Sync (add) missing WRDS tickers into the JSON
 - Preview only (no JSON changes):
-  `PYTHONPATH=. python3 -m restructured_code.main.sync_universe \
+  `PYTHONPATH=. python3 -m restructured_code.wrds.sync_universe \
      --input restructured_code/json/sec_company_tickers.json \
      --preview-missing --batch-size 1000 \
      --out restructured_code/json/missing_tickers.csv`
 - Append all missing tickers (writes .bak + CSV of appended rows):
-  `PYTHONPATH=. python3 -m restructured_code.main.sync_universe \
+  `PYTHONPATH=. python3 -m restructured_code.wrds.sync_universe \
      --input restructured_code/json/sec_company_tickers.json \
      --add-missing --batch-size 1000 \
      --changes-csv restructured_code/json/missing_tickers_added.csv`
@@ -83,7 +83,7 @@ Planned next steps:
 - Schema validation for outputs and a summary report
 SEC Downloads Web UI (browse JSON)
 - Static web page to search companies by ticker, CUSIP, PERMNO, GVKEY, CIK, or title.
-- Files live under `web/` and read the JSON you load (defaults to `../restructured_code/json/sec_company_tickers.json`).
+- Files live under `restructured_code/web/` and read the JSON you load (defaults to `../json/sec_company_tickers.json`).
 
 Run locally:
 - From repo root, start a static server:
