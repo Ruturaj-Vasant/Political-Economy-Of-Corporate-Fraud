@@ -10,6 +10,7 @@
   };
 
   const DEFAULT_JSON_PATH = '../json/sec_company_tickers.json';
+  const API_BASE = 'http://127.0.0.1:5000';
 
   function setStatus(msg, ok = true) {
     const el = $('#loadStatus');
@@ -332,4 +333,71 @@
 
   // attempt initial load
   loadFromPath(DEFAULT_JSON_PATH);
+  
+  // ---------------- Filings Download on Home -----------------
+  function renderHomeForms(forms) {
+    const box = document.getElementById('formsHomeBox');
+    if (!box) return;
+    box.innerHTML = '';
+    forms.forEach((f) => {
+      const id = 'homeform_' + f.replace(/\W+/g, '_');
+      const w = document.createElement('label');
+      w.style.display = 'inline-flex'; w.style.gap = '6px'; w.style.alignItems = 'center'; w.style.marginRight = '12px'; w.style.marginBottom = '6px';
+      w.innerHTML = `<input type="checkbox" value="${f}" id="${id}"/> <span>${f}</span>`;
+      box.appendChild(w);
+    });
+  }
+
+  async function api(path, options) {
+    const r = await fetch(API_BASE + path, Object.assign({ cache: 'no-store' }, options||{}));
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const ct = r.headers.get('content-type') || '';
+    if (ct.includes('application/json')) return await r.json();
+    return await r.text();
+  }
+
+  async function loadFormsHome() {
+    try {
+      const data = await api('/api/forms');
+      renderHomeForms(data.forms || []);
+    } catch {
+      renderHomeForms(['10-K','DEF 14A','10-Q','13F-HR','8-K','3','4','5','NPORT-P','D','C','MA-I','144']);
+    }
+  }
+
+  function selectedHomeForms() {
+    return Array.from(document.querySelectorAll('#formsHomeBox input[type=checkbox]:checked')).map(el => el.value);
+  }
+
+  async function downloadSelected() {
+    const tickerEl = document.getElementById('dlTicker');
+    if (!tickerEl) return;
+    const t = (tickerEl.value || '').trim().toUpperCase();
+    if (!t) { document.getElementById('dlStatus').textContent = 'Enter a ticker'; return; }
+    const forms = selectedHomeForms();
+    if (!forms.length) { document.getElementById('dlStatus').textContent = 'Select at least one form'; return; }
+    document.getElementById('dlStatus').textContent = 'Downloading…';
+    try {
+      await api('/api/download', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ticker: t, forms }) });
+      document.getElementById('dlStatus').textContent = 'Done';
+      const vf = document.getElementById('viewFilingsBtn');
+      if (vf) vf.href = `filings.html?ticker=${encodeURIComponent(t)}&forms=${encodeURIComponent(forms.join(','))}`;
+    } catch (e) {
+      document.getElementById('dlStatus').textContent = 'Error: ' + e.message;
+    }
+  }
+
+  async function hintTickers() {
+    try {
+      const data = await api('/api/tickers');
+      const count = (data.tickers || []).length;
+      document.getElementById('dlTickerHint').textContent = `Loaded ${count} tickers`;
+    } catch { document.getElementById('dlTickerHint').textContent = 'Tickers not loaded'; }
+  }
+
+  if (document.getElementById('formsHomeBox')) {
+    loadFormsHome();
+    document.getElementById('downloadBtn').addEventListener('click', downloadSelected);
+    document.getElementById('dlLoadTickersBtn').addEventListener('click', hintTickers);
+  }
 })();

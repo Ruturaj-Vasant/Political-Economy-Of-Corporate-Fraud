@@ -34,7 +34,7 @@
       const id = 'form_' + f.replace(/\W+/g, '_');
       const w = document.createElement('label');
       w.style.display = 'inline-flex'; w.style.gap = '6px'; w.style.alignItems = 'center'; w.style.marginRight = '12px'; w.style.marginBottom = '6px';
-      w.innerHTML = `<input type="checkbox" value="${f}" id="${id}" checked/> <span>${f}</span>`;
+      w.innerHTML = `<input type="checkbox" value="${f}" id="${id}"/> <span>${f}</span>`;
       box.appendChild(w);
     });
   }
@@ -57,12 +57,7 @@
     const ticker = ($('#ticker').value || '').trim().toUpperCase();
     if (!ticker) { setStatus('Enter a ticker', false); return; }
     const forms = getSelectedForms();
-    const y0 = ($('#yearFrom').value || '').trim();
-    const y1 = ($('#yearTo').value || '').trim();
-    const latest = $('#latestPerYear').checked;
-    const years = (y0 && y1) ? `${y0}:${y1}` : (y0 ? `${y0}:${y0}` : '');
-
-    const qs = new URLSearchParams({ ticker, forms: forms.join(','), years, latest: latest ? '1' : '0' });
+    const qs = new URLSearchParams({ ticker, forms: forms.join(',') });
     setStatus('Loading…');
     try {
       const data = await api('/api/filings?' + qs.toString());
@@ -106,6 +101,17 @@
   // wire up
   $('#searchBtn').addEventListener('click', search);
   $('#loadTickersBtn').addEventListener('click', loadTickersHint);
-  loadForms();
+  // Prefill from query params
+  const params = new URLSearchParams(location.search);
+  const t0 = (params.get('ticker') || '').toUpperCase();
+  if (t0) $('#ticker').value = t0;
+  loadForms().then(() => {
+    const formsParam = params.get('forms') || '';
+    if (formsParam) {
+      const set = new Set(formsParam.split(',').map(s => s.trim()));
+      Array.from(document.querySelectorAll('#formsBox input[type=checkbox]')).forEach(cb => {
+        if (set.has(cb.value)) cb.checked = true;
+      });
+    }
+  });
 })();
-

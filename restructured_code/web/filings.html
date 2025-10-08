@@ -9,8 +9,12 @@
   <body>
     <header>
       <h1>SEC Filings Browser</h1>
-      <p class="subtitle">Browse already-downloaded filings under data/&nbsp;&nbsp;•&nbsp;&nbsp;<a href="index.html">Home</a></p>
+      <p class="subtitle">Browse already-downloaded filings under data/</p>
     </header>
+    <nav class="topbar">
+      <a href="index.html">Home</a>
+      <a href="filings.html">Filings</a>
+    </nav>
 
     <section class="controls">
       <div class="control-row" style="gap:14px; align-items: flex-end; flex-wrap: wrap;">
@@ -23,13 +27,6 @@
         <div>
           <label>Forms</label><br/>
           <div id="formsBox" class="card" style="padding:8px; max-height:120px; overflow:auto; min-width:280px;"></div>
-        </div>
-        <div>
-          <label for="yearFrom">Years</label><br/>
-          <input id="yearFrom" type="number" placeholder="From" style="width:90px;" />
-          <span class="muted">—</span>
-          <input id="yearTo" type="number" placeholder="To" style="width:90px;" />
-          <label style="margin-left:10px;"><input id="latestPerYear" type="checkbox" /> Latest/yr</label>
         </div>
         <div>
           <button id="searchBtn">Search Filings</button>
@@ -53,4 +50,3 @@
     <script src="js/filings.js"></script>
   </body>
   </html>
-
