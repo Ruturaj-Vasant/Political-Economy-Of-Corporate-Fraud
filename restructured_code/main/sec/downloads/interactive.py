@@ -171,8 +171,12 @@ def run_interactive() -> int:
             print(f"Filing {idx}: Date: {fd}, URL: {f.url}")
             if method == "open":
                 try:
-                    # edgar lib provides .open() on the filing object
-                    f._filing_obj.open()
+                    # Prefer library .open(), else fallback to webbrowser
+                    if getattr(f._filing_obj, "open", None):
+                        f._filing_obj.open()
+                    else:
+                        import webbrowser
+                        webbrowser.open(f.url)
                     print(f"Opened filing {idx} in browser.")
                     time.sleep(0.2)
                 except Exception as e:
