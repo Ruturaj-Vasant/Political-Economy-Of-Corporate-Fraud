@@ -20,6 +20,7 @@ header h1 { margin: 0 0 4px; font-size: 22px; }
 nav.topbar { display:flex; gap:14px; align-items:center; padding: 10px 20px; border-bottom:1px solid var(--border); background: var(--card); }
 nav.topbar a { color: var(--accent); text-decoration: none; font-weight: 600; }
 nav.topbar a:hover { text-decoration: underline; }
+nav.topbar a.active { text-decoration: underline; }
 
 .loader-bar, .controls { padding: 12px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .loader-bar input[type="text"] { background: var(--card); color: var(--fg); border: 1px solid var(--border); padding: 6px 8px; border-radius: 6px; }
