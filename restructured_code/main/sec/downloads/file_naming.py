@@ -1,18 +1,25 @@
 """Centralized file naming.
 
-Pattern (per your guidance):
-  data/<TICKER>/<FORM>/<FILING_DATE>_<FORM>.<ext>
+Pattern:
+  data/<TICKER>/<FORM_FS>/<FILING_DATE>_<FORM_FS>.<ext>
+
+Where <FORM_FS> is a filesystem‑safe version of the form (spaces→underscores),
+e.g., "DEF 14A" → "DEF_14A"; hyphens are preserved.
 
 Examples:
-  data/AAPL/DEF 14A/2002-03-21_DEF 14A.html
+  data/AAPL/DEF_14A/2002-03-21_DEF_14A.html
   data/AAPL/10-K/2024-02-01_10-K.txt
-
-We retain spaces in form names for readability; the filesystem handles them.
-If you prefer normalized form codes (e.g., DEF14A), you can change here.
 """
 from __future__ import annotations
 
 from pathlib import Path
+import re
+
+
+def normalize_form_for_fs(form: str) -> str:
+    f = form.strip()
+    f = re.sub(r"\s+", "_", f)
+    return f
 
 
 def build_rel_paths(data_root: str, ticker: str, form: str, filing_date: str, prefer_ext: str = "html") -> tuple[Path, Path]:
@@ -22,9 +29,8 @@ def build_rel_paths(data_root: str, ticker: str, form: str, filing_date: str, pr
     if HTML validation fails or isn't available.
     """
     t = ticker.upper().strip()
-    f = form.strip()  # keep as given (spaces allowed)
-    base = Path(t) / f / f"{filing_date}_{f}"
+    f_fs = normalize_form_for_fs(form)
+    base = Path(t) / f_fs / f"{filing_date}_{f_fs}"
     html_rel = base.with_suffix(".html")
     txt_rel = base.with_suffix(".txt")
     return html_rel, txt_rel
-

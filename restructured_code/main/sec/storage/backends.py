@@ -49,6 +49,22 @@ class LocalStorage:
         meta_path = (self.root / relpath).with_suffix(relpath.suffix + ".meta.json")
         meta_path.write_text(json.dumps(meta, indent=2))
 
+    # Convenience helpers for sidecar metadata
+    def meta_path(self, relpath: Path) -> Path:
+        return (self.root / relpath).with_suffix(relpath.suffix + ".meta.json")
+
+    def has_meta(self, relpath: Path) -> bool:
+        return self.meta_path(relpath).exists()
+
+    def read_meta(self, relpath: Path) -> Optional[dict]:
+        p = self.meta_path(relpath)
+        if not p.exists():
+            return None
+        try:
+            return json.loads(p.read_text())
+        except Exception:
+            return None
+
 
 # Placeholder for future S3 backend (commented for now)
 """
@@ -74,4 +90,3 @@ class S3Storage:
         # TODO: upload sidecar meta JSON next to the file
         ...
 """
-

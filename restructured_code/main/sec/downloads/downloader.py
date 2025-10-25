@@ -14,10 +14,11 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 from ..config import load_config
-from ..clients.edgar_client import init_identity, list_filings_for_ticker, fetch_html, fetch_text, FilingRef
+from ..clients.edgar_client import init_identity, list_filings_for_ticker, fetch_html, fetch_text, FilingRef, fetch_best_content, get_filing_details
 from ..storage.backends import LocalStorage
 from .file_naming import build_rel_paths
 from .validator import basic_html_check, smoke_test_def14a
+from .data_index import DataIndex
 
 
 def _sha256(data: bytes) -> str:
@@ -46,7 +47,13 @@ def _validate_and_maybe_smoke(form: str, html_bytes: bytes, min_size: int, smoke
     return ok, meta_bits
 
 
-def download_filings_for_ticker(ticker: str, forms: List[str], years: Optional[Tuple[int, int]] = None) -> None:
+def download_filings_for_ticker(
+    ticker: str,
+    forms: List[str],
+    years: Optional[Tuple[int, int]] = None,
+    base_dir: Optional[str] = None,
+    dry_run: bool = False,
+) -> None:
     """Download filings for a ticker across given forms.
 
     Years filter is currently applied post‑fetch by date prefix (YYYY-).
@@ -54,7 +61,17 @@ def download_filings_for_ticker(ticker: str, forms: List[str], years: Optional[T
     """
     cfg = load_config()
     init_identity(cfg.user_agent)
-    storage = LocalStorage(cfg.data_root)
+    # Determine effective data root: always nest under a 'data' folder for custom base_dir
+    if base_dir:
+        effective_root = (Path(base_dir).expanduser() / "data").as_posix()
+    else:
+        effective_root = cfg.data_root
+    storage = LocalStorage(effective_root)
+    index = DataIndex.load(storage.root)
+    # Initialize index from sidecars if first time
+    if not (Path(storage.root) / "metadata.json").exists():
+        index.scan_from_sidecars(storage.root)
+        index.save()
 
     for form in forms:
         filings = list_filings_for_ticker(ticker, form)
@@ -70,43 +87,33 @@ def download_filings_for_ticker(ticker: str, forms: List[str], years: Optional[T
                 if y < y0 or y > y1:
                     continue
 
-            html_rel, txt_rel = build_rel_paths(cfg.data_root, ticker, form, f.filing_date)
+            html_rel, txt_rel = build_rel_paths(storage.root.as_posix(), ticker, form, f.filing_date)
             target_rel = html_rel  # default to HTML
 
-            # Resume: if HTML exists and meta missing, recompute and write meta
-            existing = storage.load_bytes(target_rel)
-            meta_path = _meta_path_for(storage, target_rel)
-            if existing is not None and not meta_path.exists():
-                ok, bits = _validate_and_maybe_smoke(form, existing, cfg.min_html_size_bytes, cfg.smoke_test_def14a)
-                meta = {
-                    "ticker": ticker,
-                    "form": form,
-                    "filing_date": f.filing_date,
-                    "url": f.url,
-                    "saved_as": "html",
-                    **bits,
-                    "size": len(existing),
-                    "sha256": _sha256(existing),
-                }
-                _write_meta(storage, target_rel, meta)
-                if ok:
-                    # Treat as done
-                    continue
-                # If invalid, we will fall through to re‑download.
+            # Skip logic using dataset index and existing files/meta
+            if index.has_filing(ticker, form, f.filing_date):
+                continue
 
-            # Download with polite delay + retries
-            html_ok = False
-            html_bytes: Optional[bytes] = None
-            reason = ""
-            for attempt in range(cfg.max_retries):
-                _sleep_polite(cfg.min_interval_seconds)
-                html_bytes = fetch_html(f)
-                if html_bytes:
-                    ok, bits = _validate_and_maybe_smoke(form, html_bytes, cfg.min_html_size_bytes, cfg.smoke_test_def14a)
-                    if ok:
-                        html_ok = True
-                        # Save HTML
-                        res = storage.save_html(target_rel, html_bytes)
+            # If either HTML or TXT file already exists locally, ensure sidecar + index, then skip
+            existing_rel: Optional[Path] = None
+            if storage.exists(html_rel):
+                existing_rel = html_rel
+            elif storage.exists(txt_rel):
+                existing_rel = txt_rel
+            if existing_rel is not None:
+                if storage.has_meta(existing_rel):
+                    # Ensure index knows about it (in case metadata.json is stale)
+                    meta_existing = storage.read_meta(existing_rel)
+                    if meta_existing:
+                        index.record(meta_existing, relpath=existing_rel)
+                        continue
+                # Sidecar missing: compute minimal meta and write it, then index + skip
+                existing_bytes = storage.load_bytes(existing_rel)
+                if existing_bytes is not None:
+                    if existing_rel.suffix == ".html":
+                        ok, bits = _validate_and_maybe_smoke(
+                            form, existing_bytes, cfg.min_html_size_bytes, cfg.smoke_test_def14a
+                        )
                         meta = {
                             "ticker": ticker,
                             "form": form,
@@ -114,35 +121,92 @@ def download_filings_for_ticker(ticker: str, forms: List[str], years: Optional[T
                             "url": f.url,
                             "saved_as": "html",
                             **bits,
+                            "size": len(existing_bytes),
+                            "sha256": _sha256(existing_bytes),
+                        }
+                    else:
+                        meta = {
+                            "ticker": ticker,
+                            "form": form,
+                            "filing_date": f.filing_date,
+                            "url": f.url,
+                            "saved_as": "txt",
+                            "size": len(existing_bytes),
+                            "sha256": _sha256(existing_bytes),
+                        }
+                    _write_meta(storage, existing_rel, meta)
+                    index.record(meta, relpath=existing_rel)
+                    continue
+
+            # Dry-run mode: report and continue without fetching
+            if dry_run:
+                print(f"Would download: {ticker} {form} {f.filing_date} -> {f.url}")
+                continue
+
+            # Download with polite delay + retries using best-content resolver
+            success = False
+            for attempt in range(cfg.max_retries):
+                _sleep_polite(cfg.min_interval_seconds)
+                saved_as, content, doc_url = fetch_best_content(f)
+                details = get_filing_details(f)
+                extra = {
+                    "doc_url": doc_url,
+                    "doc_type": saved_as if saved_as in {"html", "txt"} else None,
+                    "attachments": details.get("attachments"),
+                    "attachment_count": len(details.get("attachments", []) or []),
+                    "cik": details.get("cik"),
+                    "company": details.get("company"),
+                    "report_date": details.get("report_date"),
+                    "acceptance_datetime": details.get("acceptance_datetime"),
+                    "accession_no": details.get("accession_no"),
+                    "file_number": details.get("file_number"),
+                    "items": details.get("items"),
+                    "primary_document": details.get("primary_document"),
+                    "primary_doc_description": details.get("primary_doc_description"),
+                    "is_xbrl": details.get("is_xbrl"),
+                    "is_inline_xbrl": details.get("is_inline_xbrl"),
+                }
+                if saved_as == "html" and isinstance(content, (bytes, bytearray)):
+                    ok, bits = _validate_and_maybe_smoke(form, content, cfg.min_html_size_bytes, cfg.smoke_test_def14a)
+                    if ok:
+                        res = storage.save_html(target_rel, content)
+                        meta = {
+                            "ticker": ticker,
+                            "form": form,
+                            "filing_date": f.filing_date,
+                            "url": f.url,
+                            "saved_as": "html",
+                            **extra,
+                            **bits,
                             "size": res.size,
                             "sha256": res.sha256,
                         }
                         _write_meta(storage, target_rel, meta)
+                        index.record(meta, relpath=target_rel)
+                        success = True
                         break
-                    else:
-                        reason = bits.get("html_reason", "invalid")
+                elif saved_as == "txt" and isinstance(content, str):
+                    res2 = storage.save_text(txt_rel, content)
+                    meta2 = {
+                        "ticker": ticker,
+                        "form": form,
+                        "filing_date": f.filing_date,
+                        "url": f.url,
+                        "saved_as": "txt",
+                        **extra,
+                        "size": res2.size,
+                        "sha256": res2.sha256,
+                    }
+                    _write_meta(storage, txt_rel, meta2)
+                    index.record(meta2, relpath=txt_rel)
+                    success = True
+                    break
                 # backoff
                 time.sleep(1.0 * (2 ** attempt))
 
-            if html_ok:
-                continue
-
-            # Fallback to TXT if allowed by library / form
-            txt = fetch_text(f)
-            if txt:
-                res2 = storage.save_text(txt_rel, txt)
-                meta2 = {
-                    "ticker": ticker,
-                    "form": form,
-                    "filing_date": f.filing_date,
-                    "url": f.url,
-                    "saved_as": "txt",
-                    "fallback": True,
-                    "html_reason": reason or "html_unavailable",
-                    "size": res2.size,
-                    "sha256": res2.sha256,
-                }
-                _write_meta(storage, txt_rel, meta2)
+            if success:
                 continue
             # If neither HTML nor TXT succeeded, we just move on (logged via absence)
 
+    # Persist index at the end of the run
+    index.save()
