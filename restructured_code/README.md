@@ -98,9 +98,11 @@ Notes:
 - The layout adapts to whatever fields your JSON contains, so it remains useful as the schema grows.
 
 SEC Downloads (new, modular under `restructured_code/main/sec/`)
-- Output naming (default): `data/<TICKER>/<FORM>/<FILING_DATE>_<FORM>.<ext>`
-  - Example: `data/AAPL/DEF 14A/2002-03-21_DEF 14A.html`
+- Output naming (default): `data/<TICKER>/<FORM_FS>/<FILING_DATE>_<FORM_FS>.<ext>`
+  - Example: `data/AAPL/DEF_14A/2002-03-21_DEF_14A.html`
   - Keeps forms segregated to avoid clutter within each ticker directory.
+- Form naming (filesystem‑safe): spaces are replaced with underscores in paths and filenames
+  (e.g., `DEF 14A` → `DEF_14A`). The original form string is still stored in sidecar/meta.
 - Forms supported now: 10-K, DEF 14A, 10-Q, 13F-HR, 8-K, 3/4/5, NPORT-P, D, C, MA-I, 144.
 - Validation (on by default):
   - Non‑empty, minimum size (2KB), parseable by lxml/bs4, and no obvious block pages.
@@ -109,32 +111,71 @@ SEC Downloads (new, modular under `restructured_code/main/sec/`)
 - Resume semantics:
   - If a file exists without `meta.json`, we compute checksum + meta and validate it.
   - If valid, it is treated as done; if not, it’s re‑downloaded once with backoff.
-- Controls (non‑interactive CLI, batch/HPC‑friendly):
-  - `--forms` (e.g., `"DEF 14A,10-K"`)
-  - `--tickers AAPL,MSFT` | `--tickers-file path` | `--all` (from `restructured_code/json/sec_company_tickers.json`)
-  - `--years 2018:2025` or `--dates 2018-01-01:2024-12-31`
-  - `--latest-per-year` (optional: pick most recent filing each year)
-  - `--max-per-ticker N` (optional cap)
-  - `--include-doc-substr` / `--exclude-doc-substr` (filter primaryDocument names)
-  - `--resume` (skip existing valid files)
-  - `--verify` (on by default)
-  - `--save html|txt` (default html with fallback to txt when needed)
-  - `--user-agent you@example.com`
-  - `--concurrency 2` (polite, with 0.5s interval per process)
-- Config knobs (`restructured_code/main/sec/config.py`):
-  - `data_root` (default `data/`), `user_agent`, `min_interval_seconds`, `max_retries`, `min_html_size_bytes`, `smoke_test_def14a`.
-- HPC
-  - Use shard splitter (to be added) to split tickers across array jobs.
-  - Each task runs with modest concurrency (2) and respect for rate limits.
 
 Interactive mode (terminal prompts)
-- Run the interactive downloader that mirrors legacy menus and behavior:
+- Run the interactive downloader:
   `PYTHONPATH=. python3 -m restructured_code.main.sec.downloads.interactive`
 - Flow:
-  1) Choose a form (e.g., DEF 14A)
-  2) Enter tickers (comma-separated)
-  3) Choose save method:
+  1) Choose a base folder (blank = default). A `data/` subfolder is created inside your base.
+  2) Select a form (e.g., DEF 14A)
+  3) Enter tickers (comma-separated) or provide a tickers file (CSV/TSV/TXT)
+  4) Optionally enter PERMNO(s) and/or provide a PERMNO file to resolve to tickers
+  4) Choose save method:
      - Open in browser (local only)
      - Save as text (.txt)
      - Save as HTML (.html); if invalid/unavailable, falls back to text
-- Files are written to `data/<TICKER>/<FORM>/<DATE>_<FORM>.<ext>` with a sidecar meta.json.
+  5) Optional dry run: lists what would be downloaded without fetching
+- Files are written to `data/<TICKER>/<FORM_FS>/<DATE>_<FORM_FS>.<ext>` (FORM_FS = form with spaces replaced by underscores) with a sidecar meta.json.
+
+Dataset index (avoid re-downloads)
+- Every data folder maintains a root `metadata.json` index for quick membership checks and counts.
+- Location: `<data_root>/metadata.json` (created/updated automatically during runs).
+- Rebuild or scan from existing sidecars via CLI:
+  - Rebuild: `python3 -m restructured_code.main.sec.downloads.data_index --root data --mode rebuild`
+  - Scan/update: `python3 -m restructured_code.main.sec.downloads.data_index --root data --mode scan`
+ - Quick rebuild (example external path):
+   `python3 -m restructured_code.main.sec.downloads.data_index --root /Volumes/YourDrive/your-folder/data --mode rebuild`
+
+Migration note (older paths with spaces)
+- Older runs saved under `data/<TICKER>/<FORM with spaces>/...`. Current versions normalize to underscores.
+- If you want to standardize paths, remove the old `data/` and redownload. The index (`metadata.json`) will rebuild on first run.
+
+Bulk downloader CLI (all tickers from JSON)
+- File: `restructured_code/main/sec/downloads/bulk.py`
+- Source list: `restructured_code/json/sec_company_tickers.json`
+- Examples:
+  - Dry run all tickers (DEF 14A) into `./edgar_all/data`:
+    `PYTHONPATH=. python3 -m restructured_code.main.sec.downloads.bulk --forms "DEF 14A" --base ./edgar_all --dry-run`
+  - Real run (download):
+    `PYTHONPATH=. python3 -m restructured_code.main.sec.downloads.bulk --forms "DEF 14A" --base ./edgar_all`
+  - Multiple forms:
+    `PYTHONPATH=. python3 -m restructured_code.main.sec.downloads.bulk --forms "DEF 14A" --forms "10-K" --base ./edgar_all`
+  - Restrict to tickers:
+    `PYTHONPATH=. python3 -m restructured_code.main.sec.downloads.bulk --tickers AAPL,MSFT --forms "DEF 14A" --base ./edgar_all`
+  - Resolve by PERMNO(s):
+    `PYTHONPATH=. python3 -m restructured_code.main.sec.downloads.bulk --permnos 14593,10107 --forms "DEF 14A" --base ./edgar_all`
+  - Provide lists from files:
+    `PYTHONPATH=. python3 -m restructured_code.main.sec.downloads.bulk --tickers-file tickers.csv --permnos-file permnos.txt --forms "DEF 14A" --base ./edgar_all`
+  - Limit for testing:
+    `PYTHONPATH=. python3 -m restructured_code.main.sec.downloads.bulk --forms "DEF 14A" --limit 50 --base ./edgar_all`
+  - Year range (optional):
+    `PYTHONPATH=. python3 -m restructured_code.main.sec.downloads.bulk --forms "DEF 14A" --years 1994:2025 --base ./edgar_all`
+  - Stop after saving N new files or M new tickers (real runs only):
+    `PYTHONPATH=. python3 -m restructured_code.main.sec.downloads.bulk --forms "DEF 14A" --base ./edgar_all --max-new-files 1000`  
+    `PYTHONPATH=. python3 -m restructured_code.main.sec.downloads.bulk --forms "DEF 14A" --base ./edgar_all --max-new-tickers 4500`
+
+Environment settings (`restructured_code/main/sec/config.py`)
+- Set via environment variables before running (recommended):
+  - `SEC_USER_AGENT` (required for politeness, e.g., `you@yourdomain`)
+  - `SEC_MIN_INTERVAL` (seconds between requests; default `0.5`, e.g., `1.0`)
+  - `SEC_MAX_RETRIES` (default `3`)
+  - `SEC_MIN_HTML_SIZE` (default `2048` bytes)
+  - `SEC_SMOKE_DEF14A` (set to `1` to enable quick DEF 14A smoke test)
+  - `SEC_DATA_ROOT` (default `data`; interactive/bulk can override via base folder)
+- One‑off in shell:
+  `export SEC_USER_AGENT='you@yourdomain'; export SEC_MIN_INTERVAL=1.0`
+- Permanent in venv: append the `export` lines to `wrds_env/bin/activate`.
+
+Notes
+- The EDGAR integration uses the `edgar` library when available; otherwise it falls back to the official SEC submissions JSON for listings and archive URLs.
+- The dataset index prevents re‑downloading across runs; per‑file sidecar meta remain the detailed source of truth next to each saved file.
