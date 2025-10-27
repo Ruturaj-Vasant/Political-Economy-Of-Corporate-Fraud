@@ -164,6 +164,14 @@ Bulk downloader CLI (all tickers from JSON)
     `PYTHONPATH=. python3 -m restructured_code.main.sec.downloads.bulk --forms "DEF 14A" --base ./edgar_all --max-new-files 1000`  
     `PYTHONPATH=. python3 -m restructured_code.main.sec.downloads.bulk --forms "DEF 14A" --base ./edgar_all --max-new-tickers 4500`
 
+Index maintenance with bulk (Seagate examples)
+- Re-run without rebuild (recommended default):
+  `PYTHONPATH=. python3 -m restructured_code.main.sec.downloads.bulk --forms "DEF 14A" --base "/Volumes/SeagateX/Political-Economy-Of-Corporate-Fraud"`
+- Quick sync from sidecars, then run:
+  `PYTHONPATH=. python3 -m restructured_code.main.sec.downloads.bulk --forms "DEF 14A" --base "/Volumes/SeagateX/Political-Economy-Of-Corporate-Fraud" --scan-index`
+- Full rebuild before run (slower; only when needed):
+  `PYTHONPATH=. python3 -m restructured_code.main.sec.downloads.bulk --forms "DEF 14A" --base "/Volumes/SeagateX/Political-Economy-Of-Corporate-Fraud" --rebuild-index`
+
 Environment settings (`restructured_code/main/sec/config.py`)
 - Set via environment variables before running (recommended):
   - `SEC_USER_AGENT` (required for politeness, e.g., `you@yourdomain`)
