@@ -16,7 +16,7 @@ class SecConfig:
 
     # HTTP politeness
     user_agent: str = os.getenv("SEC_USER_AGENT", "you@example.com")
-    min_interval_seconds: float = float(os.getenv("SEC_MIN_INTERVAL", "0.5"))  # delay between requests per process
+    min_interval_seconds: float = float(os.getenv("SEC_MIN_INTERVAL", "1"))  # delay between requests per process
     max_retries: int = int(os.getenv("SEC_MAX_RETRIES", "3"))
 
     # Validation knobs
