@@ -16,7 +16,7 @@ def main(argv: List[str] = None) -> int:
     ap.add_argument("--overwrite", action="store_true", help="Overwrite existing outputs")
     ap.add_argument("--limit", type=int, default=None, help="Process only first N files per ticker")
     ap.add_argument("--text-only", action="store_true", help="Process only TXT files (regex snippet)")
-    ap.add_argument("--include-txt", action="store_true", help="Also process TXT files alongside HTML")
+    # Default behavior now processes both HTML and TXT; --include-txt no longer required
 
     args = ap.parse_args(argv)
 
@@ -40,10 +40,9 @@ def main(argv: List[str] = None) -> int:
     for t in tickers:
         if args.text_only:
             outs = extract_text_for_ticker(t, form=args.form, overwrite=args.overwrite, limit=args.limit)
-        elif args.include_txt:
-            outs = extract_for_ticker_all(t, form=args.form, overwrite=args.overwrite, limit=args.limit, include_txt=True)
         else:
-            outs = extract_for_ticker(t, form=args.form, overwrite=args.overwrite, limit=args.limit)
+            # Default: process both HTML and TXT
+            outs = extract_for_ticker_all(t, form=args.form, overwrite=args.overwrite, limit=args.limit, include_txt=True)
         print(f"{t}: {len(outs)} files extracted")
     return 0
 
