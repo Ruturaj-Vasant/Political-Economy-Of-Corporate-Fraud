@@ -171,7 +171,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"[{i}/{len(tickers)}] Ticker: {ticker}")
         try:
             # Throttle before listing
-            time.sleep(cfg.min_interval_seconds)
+            # time.sleep(cfg.min_interval_seconds)
 
             # Snapshot index totals before
             total_before = int(index._data.get("totals", {}).get("total_files", 0))

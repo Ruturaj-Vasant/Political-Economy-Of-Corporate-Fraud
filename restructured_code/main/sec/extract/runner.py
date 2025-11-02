@@ -33,11 +33,13 @@ def _report_date_from_filename(p: Path) -> Optional[str]:
 
 
 def _extracted_csv_path(data_root: Path, ticker: str, form: str, report_date: str) -> Path:
-    return data_root / ticker / form / "extracted" / f"{ticker}_{report_date}_SCT.csv"
+    f_fs = normalize_form_for_fs(form)
+    return data_root / ticker / f_fs / "extracted" / f"{ticker}_{report_date}_SCT.csv"
 
 
 def _extracted_txt_path(data_root: Path, ticker: str, form: str, report_date: str) -> Path:
-    return data_root / ticker / form / "extracted" / f"{ticker}_{report_date}_SCT.txt"
+    f_fs = normalize_form_for_fs(form)
+    return data_root / ticker / f_fs / "extracted" / f"{ticker}_{report_date}_SCT.txt"
 
 
 def extract_one_file(file_path: str | Path, ticker: str, form: str, overwrite: bool = False) -> Optional[Path]:

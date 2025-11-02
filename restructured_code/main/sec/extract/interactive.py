@@ -26,6 +26,13 @@ def _prompt_overwrite() -> bool:
     return s in ("y", "yes")
 
 
+def _prompt_extract_target() -> str:
+    print("What do you want to extract?")
+    print("  1. Summary Compensation Table (SCT) [default]")
+    choice = input("Choose [1]: ").strip()
+    return "SCT"
+
+
 def _choose_from_list(title: str, options: list[str], default_index: int = 0, allow_custom: bool = True) -> str:
     print(f"\n{title}")
     for i, opt in enumerate(options, start=1):
@@ -66,7 +73,9 @@ def run_interactive() -> int:
     else:
         print(f"Using default data root: {current_root}")
 
-    form = _prompt_form()
+    # Choose extraction target (currently SCT only); underlying form is DEF 14A
+    _ = _prompt_extract_target()
+    form = "DEF 14A"
 
     detected_tickers = detect_tickers_with_form_htmls(form=form)
     if detected_tickers:
