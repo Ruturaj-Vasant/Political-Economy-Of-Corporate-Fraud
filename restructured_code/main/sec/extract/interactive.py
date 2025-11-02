@@ -3,12 +3,12 @@ from __future__ import annotations
 # Support both module execution and direct file execution by bootstrapping sys.path
 try:
     # Preferred: module execution (python -m restructured_code.main.sec.extract.interactive)
-    from .runner import extract_for_ticker, detect_tickers_with_form_htmls  # type: ignore
+    from .runner import extract_for_ticker_all, detect_tickers_with_form_htmls  # type: ignore
 except Exception:
     # Fallback for direct path execution
     import os, sys
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..')))
-    from restructured_code.main.sec.extract.runner import extract_for_ticker, detect_tickers_with_form_htmls  # type: ignore
+    from restructured_code.main.sec.extract.runner import extract_for_ticker_all, detect_tickers_with_form_htmls  # type: ignore
 
 
 def _prompt_tickers() -> list[str]:
@@ -56,6 +56,16 @@ def _choose_from_list(title: str, options: list[str], default_index: int = 0, al
 
 
 def run_interactive() -> int:
+    import os
+    # Prompt data root (defaults to SEC_DATA_ROOT or ./data)
+    current_root = os.getenv("SEC_DATA_ROOT", "data")
+    chosen = input(f"Data root folder (Enter for default '{current_root}'): ").strip()
+    if chosen:
+        os.environ["SEC_DATA_ROOT"] = chosen
+        print(f"Using data root: {chosen}")
+    else:
+        print(f"Using default data root: {current_root}")
+
     form = _prompt_form()
 
     detected_tickers = detect_tickers_with_form_htmls(form=form)
@@ -82,10 +92,10 @@ def run_interactive() -> int:
 
     total = 0
     for t in tickers:
-        outs = extract_for_ticker(t, form=form, overwrite=overwrite)
+        outs = extract_for_ticker_all(t, form=form, overwrite=overwrite, include_txt=True)
         print(f"{t}: {len(outs)} files extracted")
         total += len(outs)
-    print(f"Done. Total CSVs: {total}")
+    print(f"Done. Total outputs: {total}")
     return 0
 
 
