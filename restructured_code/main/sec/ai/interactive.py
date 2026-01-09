@@ -5,6 +5,7 @@ try:
     # Preferred: module execution (python -m restructured_code.main.sec.ai.interactive)
     from .runner import run_for_ticker, detect_tickers_with_csvs  # type: ignore
     from ..config import load_config  # type: ignore
+    from ..downloads.file_naming import normalize_form_for_fs  # type: ignore
     from .csv_to_json import list_ollama_models  # type: ignore
 except Exception:
     # Fallback for direct path execution
@@ -13,6 +14,7 @@ except Exception:
     from restructured_code.main.sec.ai.runner import run_for_ticker, detect_tickers_with_csvs  # type: ignore
     from restructured_code.main.sec.config import load_config  # type: ignore
     from restructured_code.main.sec.ai.csv_to_json import list_ollama_models  # type: ignore
+    from restructured_code.main.sec.downloads.file_naming import normalize_form_for_fs  # type: ignore
 
 
 def _prompt_tickers() -> list[str]:
@@ -101,10 +103,10 @@ def _detect_forms_for_tickers(tickers: list[str] | None) -> list[str]:
 
 def _choose_form(tickers: list[str] | None) -> str:
     detected = _detect_forms_for_tickers(tickers)
-    # Ensure DEF 14A is present and at the top; show others after.
-    form_options = ["DEF 14A"]
+    # Ensure DEF_14A is present and at the top; show others after.
+    form_options = ["DEF_14A"]
     for f in detected:
-        if f != "DEF 14A":
+        if f != "DEF_14A":
             form_options.append(f)
     return _choose_from_list("Select document/form:", form_options, default_index=0, allow_custom=True)
 
@@ -129,9 +131,10 @@ def _choose_model() -> str:
 def run_interactive() -> int:
     # Choose form first so we can offer an 'All detected tickers' option next
     form = _choose_form(None)
+    form_fs = normalize_form_for_fs(form)
 
     # Choose tickers: either use all detected for the chosen form, or manual entry
-    detected_tickers = detect_tickers_with_csvs(form=form)
+    detected_tickers = detect_tickers_with_csvs(form=form_fs)
     if detected_tickers:
         choice = _choose_from_list(
             "Select tickers source:",
@@ -155,7 +158,14 @@ def run_interactive() -> int:
 
     total = 0
     for t in tickers:
-        outs = run_for_ticker(t, form=form, model=model)
+        outs = run_for_ticker(
+            t,
+            form=form_fs,
+            model=model,
+            limit=None,
+            overwrite=False,           # resume-safe by default
+            show_progress=True,        # show tqdm bar if available
+        )
         print(f"{t}: {len(outs)} JSON files written")
         total += len(outs)
     print(f"Done. Total JSON files: {total}")

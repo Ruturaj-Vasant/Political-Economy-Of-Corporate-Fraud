@@ -12,14 +12,20 @@ from typing import Optional
 
 # Broad pattern: from the SCT heading to the closing TABLE tag
 _SCT_PATTERN = re.compile(
-    r"SUMMARY\s+COMPENSATION\s+TABLE[\s\S]*?</TABLE>", re.IGNORECASE | re.DOTALL
+    r"SUMMARY\s+COMPENSATION\s+TABLE[\s\S]*?</TABLE>", re.DOTALL
 )
 
 
 def extract_sct_snippet(text: str) -> Optional[str]:
-    m = _SCT_PATTERN.search(text)
-    if m:
-        return m.group(0)
+    # Find all candidate blocks first (case-sensitive heading)
+    candidates = _SCT_PATTERN.findall(text)
+    if not candidates:
+        return None
+    # Cross-validate: require keywords similar to HTML XPath guard
+    for tbl in candidates:
+        t = tbl.lower()
+        if all(k in t for k in ("name", "principal", "position")):
+            return tbl
     return None
 
 
@@ -33,4 +39,3 @@ def extract_sct_snippet_from_file(path: str | Path, encoding: str = "utf-8") -> 
         except Exception:
             return None
     return extract_sct_snippet(raw)
-

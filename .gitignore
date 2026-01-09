@@ -29,6 +29,10 @@ wrds_env
 *.db
 corporate_fraud.db
 data/
+data*/
+data copy/
+data copy 2/
+data_lamma3b/
 data.zip
 Trials/
 Trials
