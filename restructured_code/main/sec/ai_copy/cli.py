@@ -3,12 +3,6 @@ from __future__ import annotations
 import argparse
 from typing import List, Optional
 
-try:  # optional progress bar for outer ticker loop
-    from tqdm import tqdm  # type: ignore
-    _HAS_TQDM = True
-except Exception:  # pragma: no cover
-    _HAS_TQDM = False
-
 from .runner import run_for_ticker, detect_tickers_with_csvs
 
 
@@ -18,8 +12,6 @@ def main(argv: List[str] = None) -> int:
     ap.add_argument("--all", action="store_true", help="Process all detected tickers for the given form")
     ap.add_argument("--form", default="DEF 14A", help="Form name (default: DEF 14A)")
     ap.add_argument("--model", default="llama3:8b", help="Ollama model (default: llama3:8b)")
-    ap.add_argument("--models", default=None, help="Comma-separated models, tried in order; overrides --model")
-    ap.add_argument("--attempts", type=int, default=3, help="Max attempts per model if JSON invalid")
     ap.add_argument("--limit", type=int, default=None, help="Process only first N CSV files per ticker")
     ap.add_argument("--overwrite", action="store_true", help="Re-generate JSON even if a valid *_SCT_kor.json exists")
     ap.add_argument("--no-progress", action="store_true", help="Disable progress bar")
@@ -38,31 +30,16 @@ def main(argv: List[str] = None) -> int:
             return 2
         tickers = [t.strip().upper() for t in args.tickers.split(',') if t.strip()]
 
-    models_list = None
-    if args.models:
-        models_list = [m.strip() for m in args.models.split(',') if m.strip()]
-
-    iterable = tickers
-    outer_bar = None
-    if not args.no_progress and _HAS_TQDM and len(tickers) > 1:
-        outer_bar = tqdm(total=len(tickers), desc="Tickers", unit="ticker")
-
-    for t in iterable:
+    for t in tickers:
         outs = run_for_ticker(
             t,
             form=args.form,
             model=args.model,
-            models=models_list,
-            attempts=int(args.attempts),
             limit=args.limit,
             overwrite=args.overwrite,
             show_progress=not args.no_progress,
         )
         print(f"{t}: {len(outs)} JSON files written")
-        if outer_bar:
-            outer_bar.update(1)
-    if outer_bar:
-        outer_bar.close()
     return 0
 
 

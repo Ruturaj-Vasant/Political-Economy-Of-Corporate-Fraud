@@ -4,13 +4,11 @@ from __future__ import annotations
 try:
     # Preferred: module execution (python -m restructured_code.main.sec.extract.interactive)
     from .runner import extract_for_ticker_all, detect_tickers_with_form_htmls  # type: ignore
-    from .run_log import RunFileLogger, TickerStats, new_run_id  # type: ignore
 except Exception:
     # Fallback for direct path execution
     import os, sys
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..')))
     from restructured_code.main.sec.extract.runner import extract_for_ticker_all, detect_tickers_with_form_htmls  # type: ignore
-    from restructured_code.main.sec.extract.run_log import RunFileLogger, TickerStats, new_run_id  # type: ignore
 
 
 def _prompt_tickers() -> list[str]:
@@ -24,24 +22,8 @@ def _prompt_form() -> str:
 
 
 def _prompt_overwrite() -> bool:
-    s = input("Overwrite existing outputs? (y/N): ").strip().lower()
+    s = input("Overwrite existing CSVs? (y/N): ").strip().lower()
     return s in ("y", "yes")
-
-
-def _prompt_extractor() -> str:
-    print("\nChoose HTML extractor:")
-    print("  1. XPath (legacy) [default]")
-    print("  2. Scoring")
-    print("  3. Both (Scoring then XPath fallback)")
-    while True:
-        choice = input("Choose [1]: ").strip()
-        if choice == "" or choice == "1":
-            return "xpath"
-        if choice == "2":
-            return "score"
-        if choice == "3":
-            return "both"
-        print("Enter 1, 2, or 3.")
 
 
 def _prompt_extract_target() -> str:
@@ -82,7 +64,6 @@ def _choose_from_list(title: str, options: list[str], default_index: int = 0, al
 
 def run_interactive() -> int:
     import os
-    from pathlib import Path
     # Prompt data root (defaults to SEC_DATA_ROOT or ./data)
     current_root = os.getenv("SEC_DATA_ROOT", "data")
     chosen = input(f"Data root folder (Enter for default '{current_root}'): ").strip()
@@ -95,7 +76,6 @@ def run_interactive() -> int:
     # Choose extraction target (currently SCT only); underlying form is DEF 14A
     _ = _prompt_extract_target()
     form = "DEF 14A"
-    extractor = _prompt_extractor()
 
     detected_tickers = detect_tickers_with_form_htmls(form=form)
     if detected_tickers:
@@ -119,27 +99,9 @@ def run_interactive() -> int:
 
     overwrite = _prompt_overwrite()
 
-    # Prepare per-run logger (writes once per ticker)
-    data_root = Path(os.environ.get("SEC_DATA_ROOT", "data"))
-    run_id = new_run_id()
-    run_logger = RunFileLogger(root=data_root, run_id=run_id, form=form)
-    print(f"Run ID: {run_id}")
-    print(f"Run log: {run_logger.path}")
-
     total = 0
     for t in tickers:
-        stats = TickerStats()
-        outs = extract_for_ticker_all(
-            t,
-            form=form,
-            overwrite=overwrite,
-            extractor=extractor,
-            include_txt=True,
-            index=None,
-            stats=stats,
-        )
-        # Persist per-ticker stats to run log
-        run_logger.write_ticker(t, stats)
+        outs = extract_for_ticker_all(t, form=form, overwrite=overwrite, include_txt=True)
         print(f"{t}: {len(outs)} files extracted")
         total += len(outs)
     print(f"Done. Total outputs: {total}")

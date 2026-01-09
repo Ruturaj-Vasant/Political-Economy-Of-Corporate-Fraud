@@ -2,18 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import List, Optional, Tuple
-import os
 import json
 import re
 
 from ..config import load_config
 from ..downloads.file_naming import normalize_form_for_fs
-from .csv_to_json import (
-    process_csv,  # backward compatibility
-    generate_json_for_csv,
-    save_json_output,
-    write_attempt_sidecars,
-)
+from .csv_to_json import process_csv
 try:  # optional progress bar
     from tqdm import tqdm  # type: ignore
     _HAS_TQDM = True
@@ -104,47 +98,6 @@ def _json_matches_filename(json_path: Path, csv_path: Path) -> Tuple[bool, str]:
     return True, "ok"
 
 
-def _expected_report_date(csv_path: Path) -> str:
-    _ticker, f_date = _filename_parts(csv_path)
-    return f_date or ""
-
-
-def _collect_report_dates_from_data(obj: object, out: set) -> None:
-    if isinstance(obj, dict):
-        for k, v in obj.items():
-            if isinstance(k, str) and k.lower() == "report_date" and isinstance(v, str) and v.strip():
-                out.add(v.strip())
-            _collect_report_dates_from_data(v, out)
-    elif isinstance(obj, list):
-        for it in obj:
-            _collect_report_dates_from_data(it, out)
-
-
-def _data_has_report_date(data: object, expected_date: str) -> bool:
-    try:
-        dates: set[str] = set()
-        _collect_report_dates_from_data(data, dates)
-        if not dates:
-            return False
-        if expected_date:
-            return expected_date in dates
-        return True
-    except Exception:
-        return False
-
-
-def _json_file_contains_report_date(json_path: Path, expected_date: str) -> bool:
-    try:
-        txt = json_path.read_text(encoding="utf-8", errors="ignore")
-        if expected_date and (expected_date in txt):
-            return True
-        # Fallback: try to parse minimally
-        data = json.loads(txt)
-        return _data_has_report_date(data, expected_date)
-    except Exception:
-        return False
-
-
 # Deterministic fallback intentionally not wired here
 
 
@@ -183,28 +136,21 @@ def run_for_ticker(
     ticker: str,
     form: str = "DEF_14A",
     model: str = "llama3:8b",
-    models: Optional[List[str]] = None,
-    attempts: int = 3,
     limit: Optional[int] = None,
     overwrite: bool = False,
     show_progress: bool = True,
 ) -> List[Path]:
     outs: List[Path] = []
     csvs = list_extracted_csvs(ticker, form)
-    # Filter to pending based on existence+size+report_date match
+    # Filter to pending based on valid kor.json presence
     pending: List[Path] = []
     for p in csvs:
         j = _kor_json_path_for(p)
-        if overwrite or (not j.exists()):
+        if not j.exists():
             pending.append(p)
             continue
-        try:
-            size_ok = j.stat().st_size > 5  # treat tiny '{}' as invalid
-        except Exception:
-            size_ok = False
-        expected_date = _expected_report_date(p)
-        has_date = _json_file_contains_report_date(j, expected_date) if size_ok else False
-        if not (size_ok and has_date):
+        ok, _reason = _json_matches_filename(j, p)
+        if overwrite or not ok:
             pending.append(p)
     if limit is not None:
         pending = pending[: int(limit)]
@@ -215,75 +161,20 @@ def run_for_ticker(
         iterator = tqdm(total=len(pending), desc=f"{ticker} files", unit="file")
 
     for p in pending:
-        # Build model list: if explicit list provided, use it; else fall back to single `model`
-        model_list: List[str] = []
-        if models:
-            model_list = [m.strip() for m in models if m and m.strip()]
-        if not model_list:
-            model_list = [model]
+        try:
+            jp = process_csv(str(p), model=model)
+        except Exception:
+            jp = None
 
-        success = False
-        final_json_path: Optional[Path] = None
-        for mname in model_list:
-            for i in range(1, max(1, int(attempts)) + 1):
-                try:
-                    data, stdout_text, stderr_text, returncode, prompt_chars, shape = generate_json_for_csv(str(p), model=mname)
-                except Exception as e:
-                    # Generation failure; record attempt sidecars and continue
-                    write_attempt_sidecars(
-                        csv_path=str(p),
-                        model=mname,
-                        attempt=i,
-                        stdout_text="",
-                        stderr_text=str(e),
-                        returncode=-1,
-                        prompt_chars=0,
-                        rows=0,
-                        cols=0,
-                        status="error",
-                        error=str(e),
-                    )
-                    continue
+        valid = False
+        out_json_path: Optional[Path] = None
+        if jp:
+            out_json_path = Path(jp)
+            ok, _reason = _json_matches_filename(out_json_path, p)
+            valid = ok
 
-                expected_date = _expected_report_date(p)
-                ok = _data_has_report_date(data, expected_date)
-                reason = None if ok else ("missing_or_mismatched_report_date" if expected_date else "missing_report_date")
-                status = "ok" if ok else "invalid"
-                write_attempt_sidecars(
-                    csv_path=str(p),
-                    model=mname,
-                    attempt=i,
-                    stdout_text=stdout_text,
-                    stderr_text=stderr_text,
-                    returncode=returncode,
-                    prompt_chars=prompt_chars,
-                    rows=shape[0],
-                    cols=shape[1],
-                    status=status,
-                    error=reason,
-                )
-
-                if ok:
-                    out_path_str = save_json_output(data, str(p))
-                    final_json_path = Path(out_path_str)
-                    try:
-                        if final_json_path.stat().st_size > 5:
-                            success = True
-                            break
-                        else:
-                            success = False
-                    except Exception:
-                        success = False
-            if success:
-                break
-
-        if success and final_json_path is not None:
-            outs.append(final_json_path)
-        else:
-            try:
-                print(f"Failed to produce JSON with report_date after {attempts} attempt(s) across {len(model_list)} model(s): {p}")
-            except Exception:
-                pass
+        if valid and out_json_path is not None:
+            outs.append(out_json_path)
         if iterator:
             iterator.update(1)
 

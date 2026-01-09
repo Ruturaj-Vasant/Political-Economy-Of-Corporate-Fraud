@@ -1,28 +1,28 @@
 """SCT extraction runner utilities.
 
-Supports three extractor modes for HTML:
-- xpath: legacy XPath guard (returns first matching table) -> HTML stub
-- score: scoring-based selector -> HTML stub
-- both: try score first, fall back to xpath -> HTML stub
+Implements per-file and per-ticker extraction using the XPath-first logic.
+Output path per request:
+  data/<TICKER>/<FORM>/extracted/<TICKER>_<REPORT_DATE>_SCT.csv
 
-Outputs:
-  data/<TICKER>/<FORM>/extracted/<TICKER>_<REPORT_DATE>_SCT.html
+We derive REPORT_DATE from the source HTML filename, which follows
+<DATE>_<FORM>.html as created by the downloader.
 
-TXT extraction (regex slice) is unchanged.
+If multiple SCT tables are detected in a single filing, we write a single CSV
+that concatenates the tables (outer join of columns), preserving rows. One CSV
+per HTML input.
 """
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 import re
+import pandas as pd
 
 from ..config import load_config
-from .sct_xpath import extract_best_sct_html_from_file as extract_xpath_html
-from .sct_score import extract_best_sct_html_from_file as extract_score_html
+from .sct_xpath import extract_sct_tables_from_file, normalize_sct_dataframe
 from .sct_text import extract_sct_snippet_from_file
 from ..downloads.file_naming import normalize_form_for_fs
 from .extract_index import ExtractionIndex
-from .run_log import TickerStats
 
 
 def _report_date_from_filename(p: Path) -> Optional[str]:
@@ -33,14 +33,37 @@ def _report_date_from_filename(p: Path) -> Optional[str]:
     return None
 
 
-def _extracted_html_path(data_root: Path, ticker: str, form: str, report_date: str) -> Path:
+def _extracted_csv_path(data_root: Path, ticker: str, form: str, report_date: str) -> Path:
     f_fs = normalize_form_for_fs(form)
-    return data_root / ticker / f_fs / "extracted" / f"{ticker}_{report_date}_SCT.html"
+    return data_root / ticker / f_fs / "extracted" / f"{ticker}_{report_date}_SCT.csv"
 
 
 def _extracted_txt_path(data_root: Path, ticker: str, form: str, report_date: str) -> Path:
     f_fs = normalize_form_for_fs(form)
     return data_root / ticker / f_fs / "extracted" / f"{ticker}_{report_date}_SCT.txt"
+
+
+def _extracted_parquet_path(data_root: Path, ticker: str, form: str, report_date: str) -> Path:
+    f_fs = normalize_form_for_fs(form)
+    return data_root / ticker / f_fs / "extracted" / f"{ticker}_{report_date}_SCT.parquet"
+
+
+def _write_parquet_safe(df: pd.DataFrame, out_path: Path) -> Optional[Tuple[Path, str]]:
+    """Attempt to write Parquet using pyarrow, then fastparquet.
+
+    Returns the path on success, or None if no engine is available.
+    """
+    try:
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        df.to_parquet(out_path, engine="pyarrow", index=False)
+        return out_path, "pyarrow"
+    except Exception:
+        # Try fastparquet as a fallback engine
+        try:
+            df.to_parquet(out_path, engine="fastparquet", index=False)
+            return out_path, "fastparquet"
+        except Exception:
+            return None
 
 
 def extract_one_file(
@@ -49,9 +72,7 @@ def extract_one_file(
     form: str,
     overwrite: bool = False,
     save_parquet: bool = False,
-    extractor: str = "xpath",  # xpath | score | both
     index: Optional[ExtractionIndex] = None,
-    stats: Optional[TickerStats] = None,
 ) -> Optional[Path]:
     cfg = load_config()
     data_root = Path(cfg.data_root)
@@ -59,14 +80,23 @@ def extract_one_file(
     report_date = _report_date_from_filename(p)
     if not report_date:
         return None
-    out_html = _extracted_html_path(data_root, ticker.upper(), form, report_date)
-    if out_html.exists() and not overwrite:
+    out_csv = _extracted_csv_path(data_root, ticker.upper(), form, report_date)
+    out_parquet = _extracted_parquet_path(data_root, ticker.upper(), form, report_date) if save_parquet else None
+    if out_csv.exists() and not overwrite:
+        # If CSV exists and Parquet requested, ensure Parquet exists (best-effort)
+        if save_parquet and out_parquet is not None and not out_parquet.exists():
+            try:
+                # Attempt to read back CSV to write parquet
+                csv_df = pd.read_csv(out_csv)
+                _write_parquet_safe(csv_df, out_parquet)
+            except Exception:
+                pass
         # Record skip in extraction index
         if index is not None:
             try:
-                rel_html = out_html.relative_to(data_root).as_posix()
+                rel_csv = out_csv.relative_to(data_root).as_posix()
             except Exception:
-                rel_html = out_html.as_posix()
+                rel_csv = out_csv.as_posix()
             try:
                 rel_src = p.relative_to(data_root).as_posix()
             except Exception:
@@ -76,32 +106,20 @@ def extract_one_file(
                 ticker=ticker.upper(),
                 form=form_fs,
                 report_date=report_date,
-                csv_relpath=rel_html,
+                csv_relpath=rel_csv,
                 rows=None,
                 cols=None,
                 columns=None,
                 source_html_relpath=rel_src,
                 status="skipped_existing",
-                parquet_relpath=None,
+                normalized=True,
+                deduped_cols=True,
+                parquet_relpath=(out_parquet.relative_to(data_root).as_posix() if (out_parquet and out_parquet.exists()) else None),
             )
-        if stats is not None:
-            stats.csv_skipped += 1
-            stats.total_entries += 1
-            if report_date:
-                stats.file_status_html[report_date] = "skipped_existing"
-        return out_html
+        return out_csv
 
-    html_stub_str: Optional[str] = None
-    if extractor == "score":
-        html_stub_str = extract_score_html(p)
-    elif extractor == "both":
-        html_stub_str = extract_score_html(p)
-        if not html_stub_str:
-            html_stub_str = extract_xpath_html(p)
-    else:  # xpath
-        html_stub_str = extract_xpath_html(p)
-
-    if not html_stub_str:
+    dfs = extract_sct_tables_from_file(p)
+    if not dfs:
         # Record 'no_sct_found'
         if index is not None:
             try:
@@ -116,22 +134,40 @@ def extract_one_file(
                 status="no_sct_found",
                 source_relpath=rel_src,
             )
-        if stats is not None:
-            stats.html_no_sct += 1
-            stats.total_entries += 1
-            if report_date:
-                stats.file_status_html[report_date] = "no_sct_found"
         return None
+    # Concatenate tables; outer join columns, reset index
+    try:
+        csv_df = pd.concat(dfs, ignore_index=True, sort=False)
+    except Exception:
+        # Fallback: write first
+        csv_df = dfs[0]
+    # Final normalization pass to ensure standardized, non-duplicate columns
+    try:
+        csv_df = normalize_sct_dataframe(csv_df)
+    except Exception:
+        # Minimal safeguard: drop duplicate-named columns
+        csv_df = csv_df.loc[:, ~csv_df.columns.duplicated()]
 
-    out_html.parent.mkdir(parents=True, exist_ok=True)
-    out_html.write_text(html_stub_str, encoding="utf-8")
+    out_csv.parent.mkdir(parents=True, exist_ok=True)
+    # Ensure no duplicate column names before writing
+    csv_df = csv_df.loc[:, ~csv_df.columns.duplicated()]
+    csv_df.to_csv(out_csv, index=False)
+    # Optional Parquet write
     parquet_rel = None
-    # Record successful HTML extraction (reuses CSV metadata slots for compatibility)
+    if save_parquet and out_parquet is not None:
+        res = _write_parquet_safe(csv_df, out_parquet)
+        if res is not None:
+            p_path, _engine = res
+            try:
+                parquet_rel = p_path.relative_to(data_root).as_posix()
+            except Exception:
+                parquet_rel = p_path.as_posix()
+    # Record successful CSV extraction
     if index is not None:
         try:
-            rel_csv = out_html.relative_to(data_root).as_posix()
+            rel_csv = out_csv.relative_to(data_root).as_posix()
         except Exception:
-            rel_csv = out_html.as_posix()
+            rel_csv = out_csv.as_posix()
         try:
             rel_src = p.relative_to(data_root).as_posix()
         except Exception:
@@ -142,19 +178,16 @@ def extract_one_file(
             form=form_fs,
             report_date=report_date,
             csv_relpath=rel_csv,
-            rows=None,
-            cols=None,
-            columns=None,
+            rows=int(csv_df.shape[0]),
+            cols=int(csv_df.shape[1]),
+            columns=[str(c) for c in csv_df.columns],
             source_html_relpath=rel_src,
             status="extracted",
+            normalized=True,
+            deduped_cols=True,
             parquet_relpath=parquet_rel,
         )
-    if stats is not None:
-        stats.csv_extracted += 1
-        stats.total_entries += 1
-        if report_date:
-            stats.file_status_html[report_date] = "extracted"
-    return out_html
+    return out_csv
 
 
 def iter_form_html_files(ticker: str, form: str) -> List[Path]:
@@ -194,9 +227,7 @@ def extract_for_ticker(
     overwrite: bool = False,
     limit: Optional[int] = None,
     save_parquet: bool = False,
-    extractor: str = "xpath",
     index: Optional[ExtractionIndex] = None,
-    stats: Optional[TickerStats] = None,
 ) -> List[Path]:
     files = iter_form_html_files(ticker, form)
     outs: List[Path] = []
@@ -209,16 +240,14 @@ def extract_for_ticker(
             form=form,
             overwrite=overwrite,
             save_parquet=save_parquet,
-            extractor=extractor,
             index=index,
-            stats=stats,
         )
         if out is not None:
             outs.append(out)
     return outs
 
 
-def extract_text_for_ticker(ticker: str, form: str = "DEF 14A", overwrite: bool = False, limit: Optional[int] = None, index: Optional[ExtractionIndex] = None, stats: Optional[TickerStats] = None) -> List[Path]:
+def extract_text_for_ticker(ticker: str, form: str = "DEF 14A", overwrite: bool = False, limit: Optional[int] = None, index: Optional[ExtractionIndex] = None) -> List[Path]:
     files = iter_form_text_files(ticker, form)
     outs: List[Path] = []
     for i, fp in enumerate(files):
@@ -252,11 +281,6 @@ def extract_text_for_ticker(ticker: str, form: str = "DEF 14A", overwrite: bool 
                     source_txt_relpath=rel_src,
                 )
             outs.append(out)
-            if stats is not None:
-                stats.txt_skipped += 1
-                stats.total_entries += 1
-                if report_date:
-                    stats.file_status_txt[report_date] = "skipped_existing"
             continue
         snippet = extract_sct_snippet_from_file(fp)
         if not snippet:
@@ -274,11 +298,6 @@ def extract_text_for_ticker(ticker: str, form: str = "DEF 14A", overwrite: bool 
                     status="no_sct_found",
                     source_relpath=rel_src,
                 )
-            if stats is not None:
-                stats.txt_no_sct += 1
-                stats.total_entries += 1
-                if report_date:
-                    stats.file_status_txt[report_date] = "no_sct_found"
             continue
         out.parent.mkdir(parents=True, exist_ok=True)
         try:
@@ -306,11 +325,6 @@ def extract_text_for_ticker(ticker: str, form: str = "DEF 14A", overwrite: bool 
                 source_txt_relpath=rel_src,
             )
         outs.append(out)
-        if stats is not None:
-            stats.txt_extracted += 1
-            stats.total_entries += 1
-            if report_date:
-                stats.file_status_txt[report_date] = "extracted"
     return outs
 
 
@@ -321,9 +335,7 @@ def extract_for_ticker_all(
     limit: Optional[int] = None,
     include_txt: bool = True,
     save_parquet: bool = False,
-    extractor: str = "xpath",
     index: Optional[ExtractionIndex] = None,
-    stats: Optional[TickerStats] = None,
 ) -> List[Path]:
     outs: List[Path] = []
     outs += extract_for_ticker(
@@ -332,9 +344,7 @@ def extract_for_ticker_all(
         overwrite=overwrite,
         limit=limit,
         save_parquet=save_parquet,
-        extractor=extractor,
         index=index,
-        stats=stats,
     )
     if include_txt:
         outs += extract_text_for_ticker(
@@ -343,7 +353,6 @@ def extract_for_ticker_all(
             overwrite=overwrite,
             limit=limit,
             index=index,
-            stats=stats,
         )
     return outs
 

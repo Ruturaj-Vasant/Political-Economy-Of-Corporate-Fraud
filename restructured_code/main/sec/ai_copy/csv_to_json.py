@@ -203,7 +203,7 @@ Rules and structure requirements:
      "company": {{
        "ticker": "{ticker}",
        "report_year": "{report_year}",
-       "summary_compensation_data": [
+       "reports": [
          {{
            "report_date": "{report_date}",
            "executives": {{
@@ -312,86 +312,11 @@ class AiMeta:
     prompt_chars: int
     status: str
     error: Optional[str] = None
-    attempt: Optional[int] = None
 
 
 def write_meta(meta: AiMeta) -> None:
     p = Path(meta.json_path).with_suffix(".ai_meta.json")
     p.write_text(json.dumps(asdict(meta), indent=2))
-
-
-# -------------------------------
-# Generation helpers (no file writes)
-# -------------------------------
-def generate_json_for_csv(csv_path: str, model: str = "llama3:8b") -> tuple[dict, str, str, int, int, tuple[int, int]]:
-    """Generate JSON for a CSV without writing files.
-
-    Returns: (data_dict, stdout_text, stderr_text, returncode, prompt_chars, (rows, cols))
-    """
-    df = read_csv_file(csv_path)
-    df = map_columns(df)
-    ticker, report_date = extract_ticker_and_date(csv_path)
-    report_year = (report_date or "")[:4] if report_date else ""
-
-    table_text = df.to_string(index=False)
-    prompt_chars = len(table_text)
-
-    data, stdout_text, stderr_text, returncode = call_deepseek_with_kor(
-        df=df,
-        ticker=ticker,
-        report_year=report_year or "",
-        report_date=report_date or "",
-        model=model,
-    )
-    return data, stdout_text, stderr_text, int(returncode), int(prompt_chars), (int(df.shape[0]), int(df.shape[1]))
-
-
-def write_attempt_sidecars(
-    *,
-    csv_path: str,
-    model: str,
-    attempt: int,
-    stdout_text: str,
-    stderr_text: str,
-    returncode: int,
-    prompt_chars: int,
-    rows: int,
-    cols: int,
-    status: str,
-    error: Optional[str],
-) -> None:
-    """Write per-attempt meta/log next to the would-be JSON path.
-
-    Files written:
-      - <stem>_SCT.attempt{N}.ai_meta.json
-      - <stem>_SCT.attempt{N}.ollama.log
-    """
-    base_json_path = os.path.splitext(csv_path)[0] + "_kor.json"
-    meta = AiMeta(
-        csv_path=csv_path,
-        json_path=base_json_path,
-        model=model,
-        rows=rows,
-        cols=cols,
-        prompt_chars=prompt_chars,
-        status=status,
-        error=error,
-        attempt=attempt,
-    )
-    # Attempt-suffixed meta
-    meta_path = Path(base_json_path).with_suffix(f".attempt{attempt}.ai_meta.json")
-    meta_path.write_text(json.dumps(asdict(meta), indent=2))
-
-    # Attempt-suffixed log
-    log_path = os.path.splitext(base_json_path)[0] + f".attempt{attempt}.ollama.log"
-    try:
-        with open(log_path, "w", encoding="utf-8") as lf:
-            lf.write("=== Model ===\n" + model + "\n\n")
-            lf.write("=== Return code ===\n" + str(returncode) + "\n\n")
-            lf.write("=== STDERR ===\n" + (stderr_text or "") + "\n\n")
-            lf.write("=== STDOUT ===\n" + (stdout_text or "") + "\n")
-    except Exception:
-        pass
 
 
 def process_csv(csv_path: str, model: str = "llama3:8b") -> Optional[str]:

@@ -23,10 +23,9 @@ def main(argv: List[str] = None) -> int:
     ap.add_argument("--all", action="store_true", help="Process all detected tickers that have HTML for the form")
     ap.add_argument("--form", default="DEF 14A", help="Form name (default: DEF 14A)")
     ap.add_argument("--overwrite", action="store_true", help="Overwrite existing outputs")
-    ap.add_argument("--save-parquet", action="store_true", help="(No-op in HTML mode) kept for compatibility")
+    ap.add_argument("--save-parquet", action="store_true", help="Also save Parquet alongside CSV (pyarrow/fastparquet)")
     ap.add_argument("--limit", type=int, default=None, help="Process only first N files per ticker")
     ap.add_argument("--text-only", action="store_true", help="Process only TXT files (regex snippet)")
-    ap.add_argument("--extractor", choices=["xpath", "score", "both"], default="xpath", help="HTML extractor to use (default: xpath)")
     # Default behavior now processes both HTML and TXT; --include-txt no longer required
     ap.add_argument("--no-progress", action="store_true", help="Disable progress bar")
 
@@ -82,7 +81,6 @@ def main(argv: List[str] = None) -> int:
                     limit=args.limit,
                     include_txt=True,
                     save_parquet=args.save_parquet,
-                    extractor=args.extractor,
                     index=None,
                     stats=stats,
                 )

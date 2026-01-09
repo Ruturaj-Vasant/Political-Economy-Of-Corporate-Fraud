@@ -24,24 +24,8 @@ def _prompt_form() -> str:
 
 
 def _prompt_overwrite() -> bool:
-    s = input("Overwrite existing outputs? (y/N): ").strip().lower()
+    s = input("Overwrite existing CSVs? (y/N): ").strip().lower()
     return s in ("y", "yes")
-
-
-def _prompt_extractor() -> str:
-    print("\nChoose HTML extractor:")
-    print("  1. XPath (legacy) [default]")
-    print("  2. Scoring")
-    print("  3. Both (Scoring then XPath fallback)")
-    while True:
-        choice = input("Choose [1]: ").strip()
-        if choice == "" or choice == "1":
-            return "xpath"
-        if choice == "2":
-            return "score"
-        if choice == "3":
-            return "both"
-        print("Enter 1, 2, or 3.")
 
 
 def _prompt_extract_target() -> str:
@@ -95,7 +79,6 @@ def run_interactive() -> int:
     # Choose extraction target (currently SCT only); underlying form is DEF 14A
     _ = _prompt_extract_target()
     form = "DEF 14A"
-    extractor = _prompt_extractor()
 
     detected_tickers = detect_tickers_with_form_htmls(form=form)
     if detected_tickers:
@@ -133,7 +116,6 @@ def run_interactive() -> int:
             t,
             form=form,
             overwrite=overwrite,
-            extractor=extractor,
             include_txt=True,
             index=None,
             stats=stats,

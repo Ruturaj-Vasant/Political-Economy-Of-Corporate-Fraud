@@ -1,56 +1,25 @@
-"""Summary Compensation Table (SCT) extraction via XPath (core logic).
+"""Summary Compensation Table (SCT) extraction via XPath (HTML stub).
 
-This module ports the XPath-first strategy from your legacy
-scripts/SEC_Documents/Compiling_functions.py with small, well-documented
-helpers and safe defaults.
-
-Main entry points:
-- extract_sct_tables_from_bytes(html_bytes) -> List[pd.DataFrame]
-- extract_sct_tables_from_file(path) -> List[pd.DataFrame]
-
-Notes
-- We return a list of candidate tables; caller decides how to persist.
-- Cleaning mirrors the legacy behavior: flatten headers, strip strings,
-  drop empty columns, dedupe columns.
+This keeps the XPath-first strategy from the legacy extractor but now
+returns a single HTML stub of the best candidate table instead of
+DataFrames. It is used as the fallback/alternative when the scoring
+extractor is not selected.
 """
 from __future__ import annotations
 
 from typing import List
 from pathlib import Path
 
-import pandas as pd
 from lxml import html as LH  # type: ignore
 
 
-def _flatten_columns(df: pd.DataFrame) -> pd.DataFrame:
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = [
-            " ".join([str(x) for x in col if "Unnamed" not in str(x)]).strip()
-            for col in df.columns.values
-        ]
-    else:
-        df.columns = [str(c).strip() for c in df.columns]
-    return df
-
-
-def _strip_cells(df: pd.DataFrame) -> pd.DataFrame:
-    # map over all cells
-    return df.map(lambda x: x.strip() if isinstance(x, str) else x)
-
-
-def process_extracted_table(table_el) -> pd.DataFrame:
-    """Convert an lxml <table> element into a cleaned DataFrame."""
-    df_list = pd.read_html(LH.tostring(table_el))
-    if not df_list:
-        return pd.DataFrame()
-    df = df_list[0]
-    df = _flatten_columns(df)
-    df = _strip_cells(df)
-    df = df.dropna(axis=1, how="all")
-    df = df.dropna(axis=0, how="all")
-    # Remove duplicate column names (keep first)
-    df = df.loc[:, ~df.columns.duplicated()]
-    return df
+def html_stub(table_html: str) -> str:
+    return (
+        "<!doctype html>\n"
+        "<html><head><meta charset=\"utf-8\"></head><body>\n"
+        f"{table_html}\n"
+        "</body></html>\n"
+    )
 
 
 _XPATH_SCT_HEADER_TR = r"""
@@ -87,32 +56,29 @@ def _unique_tables(tr_nodes) -> List:
     return out
 
 
-def extract_sct_tables_from_bytes(html_bytes: bytes) -> List[pd.DataFrame]:
-    """Return candidate SCT tables as cleaned DataFrames (may be empty list)."""
+def extract_best_sct_html_from_bytes(html_bytes: bytes) -> str | None:
+    """Return the best SCT table as an HTML stub, or None if not found."""
     try:
         tree = LH.fromstring(html_bytes)
     except Exception:
-        return []
+        return None
     tr_nodes = tree.xpath(_XPATH_SCT_HEADER_TR)
     if not tr_nodes:
-        return []
+        return None
     tables = _unique_tables(tr_nodes)
-    dfs: List[pd.DataFrame] = []
-    for t in tables:
-        try:
-            df = process_extracted_table(t)
-            if not df.empty:
-                dfs.append(df)
-        except Exception:
-            continue
-    return dfs
+    if not tables:
+        return None
+    # Use first matching table as "best" (legacy behavior)
+    best = tables[0]
+    best_html = LH.tostring(best, encoding="unicode", method="html")
+    return html_stub(best_html)
 
 
-def extract_sct_tables_from_file(path: str | Path) -> List[pd.DataFrame]:
+def extract_best_sct_html_from_file(path: str | Path) -> str | None:
     p = Path(path)
     try:
         html_bytes = p.read_bytes()
     except Exception:
-        return []
-    return extract_sct_tables_from_bytes(html_bytes)
+        return None
+    return extract_best_sct_html_from_bytes(html_bytes)
 
