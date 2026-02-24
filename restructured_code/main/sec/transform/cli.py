@@ -15,23 +15,29 @@ except Exception:
 from ..config import load_config
 from ..downloads.file_naming import normalize_form_for_fs
 from .html_to_json import process_html_file_to_json
+from .bo_html_to_json import process_bot_html_to_json
 
 
-def iter_extracted_htmls(data_root: Path, ticker: str, form: str) -> List[Path]:
+def iter_extracted_htmls(data_root: Path, ticker: str, form: str, target: str) -> List[Path]:
     t = ticker.upper()
     f_fs = normalize_form_for_fs(form)
     base = data_root / t / f_fs / "extracted"
     if not base.exists():
         return []
-    return sorted(base.glob("*_SCT.html"))
+    if target == "SCT":
+        return sorted(base.glob("*_SCT.html"))
+    if target == "BOT":
+        return sorted(base.glob("*_BOT_*.html"))
+    return []
 
 
 def main(argv: List[str] | None = None) -> int:
-    ap = argparse.ArgumentParser("Convert extracted SCT HTMLs to JSON")
+    ap = argparse.ArgumentParser("Convert extracted SCT/BOT HTMLs to JSON")
     ap.add_argument("--base", default="", help="Data root (overrides SEC_DATA_ROOT for this run)")
     ap.add_argument("--form", default="DEF 14A", help="Form name (default: DEF 14A)")
     ap.add_argument("--tickers", help="Comma-separated tickers (default: all detected under base/form/extracted)")
     ap.add_argument("--overwrite", action="store_true", help="Overwrite existing JSON files")
+    ap.add_argument("--target", choices=["SCT", "BOT"], default="SCT", help="What to convert: SCT or BOT")
     ap.add_argument("--no-progress", action="store_true", help="Disable progress bar")
     args = ap.parse_args(argv)
 
@@ -52,7 +58,9 @@ def main(argv: List[str] | None = None) -> int:
             if not child.is_dir() or child.name.startswith("."):
                 continue
             extracted_dir = child / f_fs / "extracted"
-            if extracted_dir.exists() and any(extracted_dir.glob("*_SCT.html")):
+            if extracted_dir.exists() and (
+                any(extracted_dir.glob("*_SCT.html")) if args.target == "SCT" else any(extracted_dir.glob("*_BOT_*.html"))
+            ):
                 tickers.append(child.name.upper())
         tickers = sorted(set(tickers))
 
@@ -62,16 +70,20 @@ def main(argv: List[str] | None = None) -> int:
     iterable = tqdm(tickers, desc="Tickers", unit="ticker") if use_bar else enumerate(tickers, start=1)
     for idx, t in (enumerate(iterable, start=1) if use_bar else iterable):
         start = perf_counter()
-        htmls = iter_extracted_htmls(data_root, t, args.form)
+        htmls = iter_extracted_htmls(data_root, t, args.form, args.target)
         if not htmls:
-            print(f"{t}: no extracted HTMLs found")
+            print(f"{t}: no extracted {args.target} HTMLs found")
             continue
         written = 0
         for hp in htmls:
-            out_json = data_root / t / normalize_form_for_fs(args.form) / "json" / (hp.stem.replace("_SCT", "_SCT") + ".json")
+            suffix = "_SCT" if args.target == "SCT" else "_BOT"
+            out_json = data_root / t / normalize_form_for_fs(args.form) / "json" / (hp.stem.split("_BOT_")[0] + f"{suffix}.json")
             if out_json.exists() and not args.overwrite:
                 continue
-            res = process_html_file_to_json(hp, form=args.form)
+            if args.target == "SCT":
+                res = process_html_file_to_json(hp, form=args.form)
+            else:
+                res = process_bot_html_to_json(hp, form=args.form)
             if res:
                 total += 1
                 written += 1

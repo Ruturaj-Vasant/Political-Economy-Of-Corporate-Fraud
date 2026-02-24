@@ -20,6 +20,7 @@ from ..config import load_config
 from .sct_xpath import extract_best_sct_html_from_file as extract_xpath_html
 from .sct_score import extract_best_sct_html_from_file as extract_score_html
 from .sct_text import extract_sct_snippet_from_file
+from .bo_xpath import extract_bo_tables_from_file
 from ..downloads.file_naming import normalize_form_for_fs
 from .extract_index import ExtractionIndex
 from .run_log import TickerStats
@@ -36,6 +37,11 @@ def _report_date_from_filename(p: Path) -> Optional[str]:
 def _extracted_html_path(data_root: Path, ticker: str, form: str, report_date: str) -> Path:
     f_fs = normalize_form_for_fs(form)
     return data_root / ticker / f_fs / "extracted" / f"{ticker}_{report_date}_SCT.html"
+
+
+def _extracted_bo_path(data_root: Path, ticker: str, form: str, report_date: str, idx: int) -> Path:
+    f_fs = normalize_form_for_fs(form)
+    return data_root / ticker / f_fs / "extracted" / f"{ticker}_{report_date}_BOT_{idx}.html"
 
 
 def _extracted_txt_path(data_root: Path, ticker: str, form: str, report_date: str) -> Path:
@@ -157,6 +163,100 @@ def extract_one_file(
     return out_html
 
 
+def extract_bo_for_file(
+    file_path: str | Path,
+    ticker: str,
+    form: str,
+    overwrite: bool = False,
+    max_tables: Optional[int] = None,
+    index: Optional[ExtractionIndex] = None,
+    stats: Optional[TickerStats] = None,
+) -> List[Path]:
+    cfg = load_config()
+    data_root = Path(cfg.data_root)
+    p = Path(file_path)
+    report_date = _report_date_from_filename(p)
+    if not report_date:
+        return []
+    stubs = extract_bo_tables_from_file(p, max_tables=max_tables)
+    out_paths: List[Path] = []
+
+    if not stubs:
+        if index is not None:
+            try:
+                rel_src = p.relative_to(data_root).as_posix()
+            except Exception:
+                rel_src = p.as_posix()
+            form_fs = normalize_form_for_fs(form)
+            index.record_status(
+                ticker=ticker.upper(),
+                form=form_fs,
+                report_date=report_date,
+                status="no_bo_found",
+                source_relpath=rel_src,
+            )
+        if stats is not None:
+            stats.bo_no_table += 1
+            stats.total_entries += 1
+            if report_date:
+                stats.file_status_bo[report_date] = "no_bo_found"
+        return []
+
+    saved_any = False
+    for idx, stub in enumerate(stubs, start=1):
+        out_html = _extracted_bo_path(data_root, ticker.upper(), form, report_date, idx)
+        if out_html.exists() and not overwrite:
+            if stats is not None:
+                stats.bo_skipped += 1
+            continue
+        out_html.parent.mkdir(parents=True, exist_ok=True)
+        out_html.write_text(stub, encoding="utf-8")
+        out_paths.append(out_html)
+        saved_any = True
+        if stats is not None:
+            stats.bo_extracted += 1
+
+    if stats is not None:
+        stats.total_entries += len(out_paths) if out_paths else 1
+        if report_date:
+            if saved_any:
+                stats.file_status_bo[report_date] = "extracted"
+            elif stubs:
+                stats.file_status_bo[report_date] = "skipped_existing"
+
+    if index is not None:
+        form_fs = normalize_form_for_fs(form)
+        try:
+            rel_src = p.relative_to(data_root).as_posix()
+        except Exception:
+            rel_src = p.as_posix()
+        rels = []
+        for op in out_paths:
+            try:
+                rels.append(op.relative_to(data_root).as_posix())
+            except Exception:
+                rels.append(op.as_posix())
+        if rels:
+            index.record_bo(
+                ticker=ticker.upper(),
+                form=form_fs,
+                report_date=report_date,
+                html_relpaths=rels,
+                status="extracted",
+                source_html_relpath=rel_src,
+            )
+        else:
+            index.record_status(
+                ticker=ticker.upper(),
+                form=form_fs,
+                report_date=report_date,
+                status="skipped_existing",
+                source_relpath=rel_src,
+            )
+
+    return out_paths
+
+
 def iter_form_html_files(ticker: str, form: str) -> List[Path]:
     cfg = load_config()
     data_root = Path(cfg.data_root)
@@ -195,6 +295,9 @@ def extract_for_ticker(
     limit: Optional[int] = None,
     save_parquet: bool = False,
     extractor: str = "xpath",
+    include_sct: bool = True,
+    include_bo: bool = True,
+    bo_max_tables: Optional[int] = None,
     index: Optional[ExtractionIndex] = None,
     stats: Optional[TickerStats] = None,
 ) -> List[Path]:
@@ -203,18 +306,31 @@ def extract_for_ticker(
     for i, fp in enumerate(files):
         if limit is not None and i >= limit:
             break
-        out = extract_one_file(
-            fp,
-            ticker=ticker,
-            form=form,
-            overwrite=overwrite,
-            save_parquet=save_parquet,
-            extractor=extractor,
-            index=index,
-            stats=stats,
-        )
-        if out is not None:
-            outs.append(out)
+        if include_sct:
+            out = extract_one_file(
+                fp,
+                ticker=ticker,
+                form=form,
+                overwrite=overwrite,
+                save_parquet=save_parquet,
+                extractor=extractor,
+                index=index,
+                stats=stats,
+            )
+            if out is not None:
+                outs.append(out)
+        if include_bo:
+            outs.extend(
+                extract_bo_for_file(
+                    fp,
+                    ticker=ticker,
+                    form=form,
+                    overwrite=overwrite,
+                    max_tables=bo_max_tables,
+                    index=index,
+                    stats=stats,
+                )
+            )
     return outs
 
 
@@ -320,6 +436,9 @@ def extract_for_ticker_all(
     overwrite: bool = False,
     limit: Optional[int] = None,
     include_txt: bool = True,
+    include_sct: bool = True,
+    include_bo: bool = True,
+    bo_max_tables: Optional[int] = None,
     save_parquet: bool = False,
     extractor: str = "xpath",
     index: Optional[ExtractionIndex] = None,
@@ -333,6 +452,9 @@ def extract_for_ticker_all(
         limit=limit,
         save_parquet=save_parquet,
         extractor=extractor,
+        include_sct=include_sct,
+        include_bo=include_bo,
+        bo_max_tables=bo_max_tables,
         index=index,
         stats=stats,
     )

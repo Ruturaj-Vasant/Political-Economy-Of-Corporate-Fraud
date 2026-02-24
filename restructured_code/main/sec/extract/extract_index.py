@@ -24,6 +24,7 @@ class _FormExtractNode:
     count_csv: int
     count_txt: int
     count_parquet: int
+    count_bo: int
     last_updated: str
 
 
@@ -50,13 +51,19 @@ class ExtractionIndex:
                 "root": str(r.resolve()),
                 "generated_at": _now_iso(),
                 "tickers": {},
-                "totals": {"total_csv": 0, "total_txt": 0, "total_parquet": 0, "total_entries": 0},
+                "totals": {
+                    "total_csv": 0,
+                    "total_txt": 0,
+                    "total_parquet": 0,
+                    "total_entries": 0,
+                    "total_bo": 0,
+                },
             }
         return cls(r, data)
 
     def save(self) -> None:
         # Recompute counts before saving
-        total_csv = total_txt = total_parquet = total_entries = 0
+        total_csv = total_txt = total_parquet = total_entries = total_bo = 0
         for _t, tnode in self._data.get("tickers", {}).items():
             tfiles = 0
             for _f, fnode in tnode.get("forms", {}).items():
@@ -64,19 +71,23 @@ class ExtractionIndex:
                 c_csv = sum(1 for e in entries.values() if e.get("csv_relpath"))
                 c_txt = sum(1 for e in entries.values() if e.get("txt_relpath"))
                 c_parq = sum(1 for e in entries.values() if e.get("parquet_relpath"))
+                c_bo = sum(len(e.get("bo_html_relpaths", []) or []) for e in entries.values())
                 fnode["count_csv"] = c_csv
                 fnode["count_txt"] = c_txt
                 fnode["count_parquet"] = c_parq
+                fnode["count_bo"] = c_bo
                 fnode["last_updated"] = _now_iso()
                 tfiles += len(entries)
                 total_csv += c_csv
                 total_txt += c_txt
                 total_parquet += c_parq
+                total_bo += c_bo
             tnode["total_extracted_files"] = tfiles
             total_entries += tfiles
         self._data["totals"]["total_csv"] = total_csv
         self._data["totals"]["total_txt"] = total_txt
         self._data["totals"]["total_parquet"] = total_parquet
+        self._data["totals"]["total_bo"] = total_bo
         self._data["totals"]["total_entries"] = total_entries
         self._data["generated_at"] = _now_iso()
         (self.root / "metadata-extract.json").write_text(json.dumps(self._data, indent=2))
@@ -91,6 +102,7 @@ class ExtractionIndex:
             "count_csv": 0,
             "count_txt": 0,
             "count_parquet": 0,
+            "count_bo": 0,
             "last_updated": _now_iso(),
         })
         return fnode
@@ -140,6 +152,27 @@ class ExtractionIndex:
         if write_immediately:
             self.save()
 
+    def record_bo(
+        self,
+        *,
+        ticker: str,
+        form: str,
+        report_date: str,
+        html_relpaths: list[str],
+        status: str = "extracted",
+        source_html_relpath: Optional[str] = None,
+        write_immediately: bool = True,
+    ) -> None:
+        ent = self._ensure_entry(ticker, form, report_date)
+        ent.update({
+            "status": status,
+            "bo_html_relpaths": list(html_relpaths),
+        })
+        if source_html_relpath:
+            ent["source_html_relpath"] = source_html_relpath
+        if write_immediately:
+            self.save()
+
     def record_txt(
         self,
         *,
@@ -179,4 +212,3 @@ class ExtractionIndex:
             ent["source_relpath"] = source_relpath
         if write_immediately:
             self.save()
-

@@ -25,7 +25,7 @@ def combined_html_df(htmlfile: str | Path) -> pd.DataFrame:
     # extract tables
     try:
         tables = pd.read_html(htmlfile)
-    except ValueError:
+    except Exception:
         return pd.DataFrame()
     if not tables:
         return pd.DataFrame()
@@ -928,13 +928,15 @@ def write_combined_json(ticker: str, form: str, data_root: Path) -> Optional[Pat
         entry = sct_list[0]
         report_date = entry.get("report_date")
         executives = entry.get("executives")
-        if report_date and isinstance(executives, dict):
+        if report_date and isinstance(executives, dict) and executives:
             combined["summary_compensation_table"][report_date] = {"executives": executives}
         ry = comp.get("report_year")
         if ry is not None:
             report_years.add(str(ry))
     if report_years:
         combined["report_years"] = sorted(report_years)
+    if not combined["summary_compensation_table"]:
+        return None
     out_path = json_dir / f"{t}_SCT_combined.json"
     out_path.write_text(json.dumps(combined, indent=2))
     return out_path
@@ -953,8 +955,17 @@ def process_html_file_to_json(html_path: str | Path, form: str = "DEF 14A") -> O
     # Debug view: print full DataFrame (may be large)
     # _save_debug_csv(df, p, "combined")
     df = clean_sct_dataframe(df)
+    if df.empty:
+        return None
     _save_debug_csv(df, p, "cleaned")
     payload = dataframe_to_json(df, ticker=ticker, report_date=report_date, report_year=report_year or report_date[:4])
+    executives = (
+        payload.get("company", {})
+        .get("summary_compensation_table", [{}])[0]
+        .get("executives", {})
+    )
+    if not executives:
+        return None
 
     form_fs = normalize_form_for_fs(form)
     out_dir = data_root / ticker / form_fs / "json"

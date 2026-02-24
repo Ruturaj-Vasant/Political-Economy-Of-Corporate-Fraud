@@ -22,6 +22,9 @@ class TickerStats:
     csv_extracted: int = 0
     csv_skipped: int = 0
     html_no_sct: int = 0
+    bo_extracted: int = 0
+    bo_skipped: int = 0
+    bo_no_table: int = 0
     txt_extracted: int = 0
     txt_skipped: int = 0
     txt_no_sct: int = 0
@@ -29,6 +32,7 @@ class TickerStats:
     total_entries: int = 0
     # Per-file date -> status (for compact per-ticker entries)
     file_status_html: dict[str, str] = field(default_factory=dict)
+    file_status_bo: dict[str, str] = field(default_factory=dict)
     file_status_txt: dict[str, str] = field(default_factory=dict)
 
 
@@ -74,6 +78,7 @@ class RunFileLogger:
                 "total_txt": 0,
                 "total_parquet": 0,
                 "total_entries": 0,
+                "total_bo": 0,
                 "tickers_done": 0,
             },
             "tickers": {},
@@ -106,6 +111,7 @@ class RunFileLogger:
             "total_txt": 0,
             "total_parquet": 0,
             "total_entries": 0,
+            "total_bo": 0,
             "tickers_done": 0,
         })
 
@@ -114,6 +120,7 @@ class RunFileLogger:
         if prev:
             # subtract previous contribution
             totals["total_csv"] -= int(prev.get("csv_extracted", 0)) + int(prev.get("csv_skipped", 0))
+            totals["total_bo"] -= int(prev.get("bo_extracted", 0)) + int(prev.get("bo_skipped", 0))
             totals["total_txt"] -= int(prev.get("txt_extracted", 0)) + int(prev.get("txt_skipped", 0))
             totals["total_parquet"] -= int(prev.get("parquet_written", 0))
             totals["total_entries"] -= int(prev.get("total_entries", 0))
@@ -122,6 +129,7 @@ class RunFileLogger:
 
         # add new contribution
         totals["total_csv"] += int(stats.csv_extracted) + int(stats.csv_skipped)
+        totals["total_bo"] += int(stats.bo_extracted) + int(stats.bo_skipped)
         totals["total_txt"] += int(stats.txt_extracted) + int(stats.txt_skipped)
         totals["total_parquet"] += int(stats.parquet_written)
         totals["total_entries"] += int(stats.total_entries)
@@ -130,6 +138,10 @@ class RunFileLogger:
         precedence = {"extracted": 3, "skipped_existing": 2, "no_sct_found": 1}
         dates: dict[str, str] = {}
         for d, st in (stats.file_status_html or {}).items():
+            cur = dates.get(d)
+            if cur is None or precedence.get(st, 0) > precedence.get(cur, 0):
+                dates[d] = st
+        for d, st in (stats.file_status_bo or {}).items():
             cur = dates.get(d)
             if cur is None or precedence.get(st, 0) > precedence.get(cur, 0):
                 dates[d] = st
@@ -143,6 +155,9 @@ class RunFileLogger:
             "csv_extracted": int(stats.csv_extracted),
             "csv_skipped": int(stats.csv_skipped),
             "html_no_sct": int(stats.html_no_sct),
+            "bo_extracted": int(stats.bo_extracted),
+            "bo_skipped": int(stats.bo_skipped),
+            "bo_no_table": int(stats.bo_no_table),
             "txt_extracted": int(stats.txt_extracted),
             "txt_skipped": int(stats.txt_skipped),
             "txt_no_sct": int(stats.txt_no_sct),

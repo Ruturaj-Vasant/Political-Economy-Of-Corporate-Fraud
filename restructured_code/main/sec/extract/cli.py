@@ -27,6 +27,9 @@ def main(argv: List[str] = None) -> int:
     ap.add_argument("--limit", type=int, default=None, help="Process only first N files per ticker")
     ap.add_argument("--text-only", action="store_true", help="Process only TXT files (regex snippet)")
     ap.add_argument("--extractor", choices=["xpath", "score", "both"], default="xpath", help="HTML extractor to use (default: xpath)")
+    ap.add_argument("--skip-sct", action="store_true", help="Skip Summary Compensation Table (SCT) extraction")
+    ap.add_argument("--skip-bo", action="store_true", help="Skip Beneficial Ownership extraction")
+    ap.add_argument("--bo-max-tables", type=int, default=0, help="Max BO tables to save per filing (0 = no limit)")
     # Default behavior now processes both HTML and TXT; --include-txt no longer required
     ap.add_argument("--no-progress", action="store_true", help="Disable progress bar")
 
@@ -80,7 +83,10 @@ def main(argv: List[str] = None) -> int:
                     form=args.form,
                     overwrite=args.overwrite,
                     limit=args.limit,
-                    include_txt=True,
+                    include_txt=not args.skip_sct,  # TXT snippet is SCT-specific
+                    include_sct=not args.skip_sct,
+                    include_bo=not args.skip_bo,
+                    bo_max_tables=args.bo_max_tables if args.bo_max_tables > 0 else None,
                     save_parquet=args.save_parquet,
                     extractor=args.extractor,
                     index=None,

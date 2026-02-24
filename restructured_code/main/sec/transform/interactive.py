@@ -4,6 +4,7 @@ from __future__ import annotations
 try:
     from .cli import iter_extracted_htmls
     from .html_to_json import process_html_file_to_json
+    from .bo_html_to_json import process_bot_html_to_json
     from ..config import load_config
     from ..downloads.file_naming import normalize_form_for_fs
 except Exception:
@@ -11,6 +12,7 @@ except Exception:
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..')))
     from restructured_code.main.sec.transform.cli import iter_extracted_htmls  # type: ignore
     from restructured_code.main.sec.transform.html_to_json import process_html_file_to_json  # type: ignore
+    from restructured_code.main.sec.transform.bo_html_to_json import process_bot_html_to_json  # type: ignore
     from restructured_code.main.sec.config import load_config  # type: ignore
     from restructured_code.main.sec.downloads.file_naming import normalize_form_for_fs  # type: ignore
 
@@ -47,9 +49,20 @@ def _prompt_overwrite() -> bool:
     return s in ("y", "yes")
 
 
+def _prompt_target() -> str:
+    print("What do you want to convert?")
+    print("  1. Summary Compensation Table (SCT) [default]")
+    print("  2. Beneficial Ownership (BOT)")
+    choice = input("Choose [1]: ").strip()
+    if choice == "2":
+        return "BOT"
+    return "SCT"
+
+
 def run_interactive() -> int:
     data_root = _prompt_root()
     form = _prompt_form()
+    target = _prompt_target()
     overwrite = _prompt_overwrite()
 
     # Detect tickers with extracted HTMLs
@@ -59,7 +72,9 @@ def run_interactive() -> int:
         if not child.is_dir() or child.name.startswith("."):
             continue
         extracted_dir = child / f_fs / "extracted"
-        if extracted_dir.exists() and any(extracted_dir.glob("*_SCT.html")):
+        if extracted_dir.exists() and (
+            any(extracted_dir.glob("*_SCT.html")) if target == "SCT" else any(extracted_dir.glob("*_BOT_*.html"))
+        ):
             detected.append(child.name.upper())
     detected = sorted(set(detected))
 
@@ -70,16 +85,20 @@ def run_interactive() -> int:
 
     total = 0
     for t in tickers:
-        htmls = iter_extracted_htmls(data_root, t, form)
+        htmls = iter_extracted_htmls(data_root, t, form, target)
         if not htmls:
-            print(f"{t}: no extracted HTMLs found")
+            print(f"{t}: no extracted {target} HTMLs found")
             continue
         count = 0
         for hp in htmls:
-            out_json = data_root / t / f_fs / "json" / (hp.stem.replace("_SCT", "_SCT") + ".json")
+            suffix = "_SCT" if target == "SCT" else "_BOT"
+            out_json = data_root / t / f_fs / "json" / (hp.stem.split("_BOT_")[0] + f"{suffix}.json")
             if out_json.exists() and not overwrite:
                 continue
-            res = process_html_file_to_json(hp, form=form)
+            if target == "SCT":
+                res = process_html_file_to_json(hp, form=form)
+            else:
+                res = process_bot_html_to_json(hp, form=form)
             if res:
                 count += 1
                 total += 1
@@ -98,4 +117,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

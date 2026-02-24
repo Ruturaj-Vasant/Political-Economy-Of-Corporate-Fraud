@@ -47,7 +47,10 @@ def _prompt_extractor() -> str:
 def _prompt_extract_target() -> str:
     print("What do you want to extract?")
     print("  1. Summary Compensation Table (SCT) [default]")
+    print("  2. Beneficial Ownership (BO)")
     choice = input("Choose [1]: ").strip()
+    if choice == "2":
+        return "BO"
     return "SCT"
 
 
@@ -92,10 +95,21 @@ def run_interactive() -> int:
     else:
         print(f"Using default data root: {current_root}")
 
-    # Choose extraction target (currently SCT only); underlying form is DEF 14A
-    _ = _prompt_extract_target()
+    target = _prompt_extract_target()
     form = "DEF 14A"
-    extractor = _prompt_extractor()
+    extractor = _prompt_extractor() if target == "SCT" else "xpath"
+    include_bo = target == "BO"
+    include_sct = target == "SCT"
+    bo_max_tables: int | None = None
+    if include_bo:
+        raw = input("Max BO tables per filing (Enter for no limit): ").strip()
+        if raw:
+            try:
+                val = int(raw)
+                bo_max_tables = val if val > 0 else None
+            except ValueError:
+                print("Invalid number, using no limit.")
+                bo_max_tables = None
 
     detected_tickers = detect_tickers_with_form_htmls(form=form)
     if detected_tickers:
@@ -134,7 +148,10 @@ def run_interactive() -> int:
             form=form,
             overwrite=overwrite,
             extractor=extractor,
-            include_txt=True,
+            include_txt=include_sct,  # TXT only relevant for SCT flow
+            include_sct=include_sct,
+            include_bo=include_bo,
+            bo_max_tables=bo_max_tables,
             index=None,
             stats=stats,
         )
