@@ -42,3 +42,10 @@ manual_downloads
 out/
 
 whatdowewant.txt
+
+# Large SEC ticker JSONs
+restructured_code/json/sec_company_tickers.json
+restructured_code/json/sec_company_tickers.json.bak
+restructured_code/json/sec_company_tickers.json.bak-*
+restructured_code/json/sec_company_tickers_*.json.bak
+restructured_code/json/sec_company_tickers.json.zip
